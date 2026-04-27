@@ -113,6 +113,15 @@ function smokePipedMultiCharacterActionPath() {
   assert(countOccurrences(result.stdout, 'Action: ') === 2, 'multi-character action should rerender before quit');
 }
 
+function smokeProjectsPageRefreshPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const result = runApp('r\nq\n', home);
+
+  assert(result.status === 0, result.stderr || 'projects page refresh path failed');
+  assert(result.stdout.includes('R. Refresh'), 'projects page did not render refresh action');
+  assert(countOccurrences(result.stdout, 'Action: ') === 2, 'refresh action should rerender projects page');
+}
+
 function smokeNoColorBootFlagPath() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
   const result = runApp('q\n', home, ['--no-color']);
@@ -219,6 +228,57 @@ function smokeGitRepoDiscovery() {
   assert(result.stdout.includes('now'), 'projects page did not render discovered last commit age');
 }
 
+function smokeProjectsPageHideCleanTogglePath() {
+  if (!gitAvailable()) {
+    console.log('smoke projects page hide clean toggle skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const dirtyProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-dirty-project-'));
+  const cleanProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-clean-project-'));
+  const missingProjectPath = path.join(os.tmpdir(), 'repoteer-smoke-missing-project-toggle');
+  const dirtyRepoPath = path.join(dirtyProjectPath, 'repo');
+  const cleanRepoPath = path.join(cleanProjectPath, 'repo');
+
+  initGitRepo(dirtyRepoPath);
+  initGitRepo(cleanRepoPath);
+
+  fs.writeFileSync(path.join(dirtyRepoPath, 'file.txt'), 'one\n');
+  commitAll(dirtyRepoPath, 'seed dirty');
+  fs.writeFileSync(path.join(dirtyRepoPath, 'file.txt'), 'one\ntwo\n');
+
+  fs.writeFileSync(path.join(cleanRepoPath, 'file.txt'), 'one\n');
+  commitAll(cleanRepoPath, 'seed clean');
+
+  const storageDir = path.join(home, '.repoteer', 'storage');
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Dirty Project', path: dirtyProjectPath, shortcut: null },
+    { name: 'Clean Project', path: cleanProjectPath, shortcut: null },
+    { name: 'Warning Project', path: missingProjectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp('t\nq\n', home);
+
+  assert(result.status === 0, result.stderr || 'projects page hide clean toggle path failed');
+  assert(result.stdout.includes('T. Hide projects without code changes'), 'projects page did not render hide clean toggle action');
+  assert(result.stdout.includes('T. Show all projects'), 'projects page did not render show all toggle action');
+
+  const screens = result.stdout.split('Action: ');
+  assert(screens.length >= 3, 'toggle path should render projects page twice');
+
+  const allProjectsScreen = screens[0];
+  const filteredProjectsScreen = screens[1];
+
+  assert(allProjectsScreen.includes('Dirty Project'), 'initial projects screen should show dirty project');
+  assert(allProjectsScreen.includes('Clean Project'), 'initial projects screen should show clean project');
+  assert(allProjectsScreen.includes('Warning Project'), 'initial projects screen should show warning project');
+  assert(filteredProjectsScreen.includes('Dirty Project'), 'filtered projects screen should keep dirty project');
+  assert(!filteredProjectsScreen.includes('Clean Project'), 'filtered projects screen should hide clean project');
+  assert(filteredProjectsScreen.includes('Warning Project'), 'filtered projects screen should keep warning project');
+}
+
 function smokeScannerMissingProjectPath() {
   const git = new Git();
   const scanner = new Scanner(git);
@@ -285,9 +345,11 @@ smokeQuitPath();
 smokeNoColorBootFlagPath();
 smokeSettingsToggleColorPath();
 smokePipedMultiCharacterActionPath();
+smokeProjectsPageRefreshPath();
 smokeAddProjectPath();
 smokeAddProjectCancelPath();
 smokeGitRepoDiscovery();
+smokeProjectsPageHideCleanTogglePath();
 smokeScannerMissingProjectPath();
 smokeDuplicateValidation();
 smokeTableFormatting();

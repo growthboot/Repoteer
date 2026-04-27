@@ -34,6 +34,7 @@ export async function main(argv = process.argv.slice(2)) {
     git,
     scanner,
     color,
+    projectsPageHideClean: false,
     snapshot: { projects: [] },
     refreshSnapshot() {
       this.snapshot = this.scanner.scanProjects(this.projectManager.listProjects());

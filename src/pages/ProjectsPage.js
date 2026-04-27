@@ -16,10 +16,14 @@ export class ProjectsPage {
     console.log('');
 
     const snapshot = this.runtime.refreshSnapshot();
-    const projects = snapshot.projects;
+    const hideCleanProjects = this.runtime.projectsPageHideClean === true;
+    const projects = hideCleanProjects ? snapshot.projects.filter((project) => {
+      return this.shouldShowProjectWhenCleanHidden(project);
+    }) : snapshot.projects;
 
     if (projects.length === 0) {
-      console.log(color.dim('No projects added.'));
+      const message = snapshot.projects.length === 0 ? 'No projects added.' : 'No projects with code changes.';
+      console.log(color.dim(message));
     } else {
       const rows = [
         ['', color.bold('Project'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit'), color.bold('shortcut')]
@@ -49,6 +53,8 @@ export class ProjectsPage {
     }
 
     console.log('');
+    console.log(color.bold('T.') + ' ' + (hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes'));
+    console.log(color.bold('R.') + ' Refresh');
     console.log(color.bold('A.') + ' Add project');
     console.log(color.bold('S.') + ' Settings');
     console.log(color.bold('Q.') + ' Quit');
@@ -68,11 +74,32 @@ export class ProjectsPage {
       return;
     }
 
+    if (key === 't') {
+      this.runtime.projectsPageHideClean = !hideCleanProjects;
+      await this.router.replace('projects');
+      return;
+    }
+
+    if (key === 'r') {
+      await this.router.replace('projects');
+      return;
+    }
+
     if (key === 'q') {
       return;
     }
 
     await this.router.replace('projects');
+  }
+
+  shouldShowProjectWhenCleanHidden(project) {
+    return Boolean(project.warning) || (
+      Boolean(project.totals) && (
+        project.totals.added !== 0 ||
+        project.totals.removed !== 0 ||
+        project.totals.modifiedFiles !== 0
+      )
+    );
   }
 
   formatChanges(project) {
