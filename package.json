@@ -1,0 +1,15 @@
+{
+  "name": "repoteer",
+  "version": "0.0.0",
+  "description": "Project-level Git change navigator",
+  "type": "module",
+  "bin": {
+    "repoteer": "./bin/repoteer.js"
+  },
+  "scripts": {
+    "start": "node src/app.js",
+    "check": "node --check src/app.js",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "license": "MIT"
+}
