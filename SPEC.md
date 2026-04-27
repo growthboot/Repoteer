@@ -2,11 +2,14 @@
 
 ## Core Interaction Model
 
-Repoteer is a keyboard-driven CLI with two levels:
+Repoteer is a keyboard-driven CLI with 4 levels:
 
-Projects list → Project → Repo
+Projects list → Project → Repo → Diff
 
-Navigation is always linear and reversible.
+Navigation is always linear and reversible with the same buttons B or escape.
+
+Each project contains:
+list of repos with +/- and last commit ago date
 
 Each repo contains:
 - diff view
@@ -23,10 +26,10 @@ Shown immediately on startup after scanning.
 ```text
 Repoteer
 
-   Project             + / -        net    contains       last commit
-1. AppVideoStudio      +240 / -31   +209   (3 repos)      2d ago
-2. WebCull             +12 / -4     +8     (1 repo).      24m ago
-3. ContextScript       +884 / -120  +764   (5 repos).     2h ago
+   Project             + / -          net      modifed       last commit
+1. AppVideoStudio      +240 / -31     +209     2 repos       2d ago
+2. WebCull             +12 / -4       +8       1 repo        24m ago
+3. ContextScript       +884 / -120    +764     5 repos       2h ago
 
 A. Add project
 S. Settings
@@ -70,16 +73,19 @@ Rules:
 
 ---
 
-## Project Screen (Repo View)
+## Project Screen
 
 ```text
 Project: AppVideoStudio
 
-1. frontend            +120 / -10   net +110
-2. backend             +80 / -15    net +65
-3. worker              +40 / -6     net +34
+   Repo                + / -        net        modfied     last commit
+
+1. frontend            +120 / -10   +110.      3 files     25m ago
+2. backend             +80 / -15    +65        22 files    1y ago
+3. worker              +40 / -6     +34        1 files     5d ago
 
 Bookmarks                           Commands
+
 b1. Dashboard                       c1. project cli
 b2. Dev homepage
 
@@ -96,6 +102,8 @@ Rules:
 * Always shows all repos even if there are no changes
 * Toggles the display of only dirty repos (off by default)
 * Sorted alphabetically
+* Bookmarks and commands shown on this screen are project-level.
+* Repo-specific bookmarks and commands are not part of the current scope.
 
 Actions:
 
@@ -120,7 +128,7 @@ S. Generate summary
 M. Generate commit message prompt
 MC. Save commit message prompt to clipboard and auto open your default chat client
 H. Hotfix commit
-C. Write a commit & push
+P. Write a commit & push
 B or [Esc]. Go back one menu
 ```
 
@@ -128,6 +136,31 @@ Rules:
 
 * Diff is not shown by default (only on demand)
 * Keep this screen minimal and fast
+
+
+Commit actions must always enter a confirmation step before writing Git data.
+
+The confirmation step shows:
+
+* commit title
+* commit body
+* affected repo
+* changed file count
+* `Confirm`
+* `Edit title`
+* `Edit body`
+* `Back / Cancel`
+
+No commit action may run directly from the Repo Screen.
+
+`H. Hotfix commit` opens the confirmation step with a generated hotfix title and default message.
+
+`P. Write a commit & push` should be treated as two phases that can be canceled along the way
+
+1. create commit after confirmation
+2. ask whether to push after the commit succeeds
+
+Push must never happen automatically before the user confirms the commit.
 
 ---
 
@@ -140,7 +173,7 @@ Default message: Auto hotfix commit
 ## Settings
 
 Actions:
-1. Set API key for generating commit title and descriptions
+1. Set API key for generating commit title and body
 2. Set up default default chat client for commit summaries
 3. Customize diff generation message pre-prompt
 4. Customize security review pre-prompt
@@ -272,6 +305,9 @@ Display format:
 * No nested command chains
 * Always provide a visible way to go back (`B`) or Escape key
 * No hidden commands
+* Key bindings are screen-local unless explicitly marked global.
+* The same key may be reused on different screens when the action is clear from the visible menu.
+* Global keys are reserved for universal navigation only, such as `B`, `Esc`, and `Q` where applicable.
 
 ---
 
