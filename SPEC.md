@@ -1,0 +1,288 @@
+# Repoteer Specification
+
+## Core Interaction Model
+
+Repoteer is a keyboard-driven CLI with two levels:
+
+Projects list → Project → Repo
+
+Navigation is always linear and reversible.
+
+Each repo contains:
+- diff view
+- commit feature
+- custom bookmarks column
+- custom commands column
+
+---
+
+## Main Screen (Project View)
+
+Shown immediately on startup after scanning.
+
+```text
+Repoteer
+
+   Project             + / -        net    contains       last commit
+1. AppVideoStudio      +240 / -31   +209   (3 repos)      2d ago
+2. WebCull             +12 / -4     +8     (1 repo).      24m ago
+3. ContextScript       +884 / -120  +764   (5 repos).     2h ago
+
+A. Add project
+S. Settings
+Q. Quit
+```
+
+Rules:
+
+* Projects listed by number
+* Shortcut keys (if defined) must be letters and not main navigation letters (navigation is priority)
+* Always sorted by change volume (largest first)
+* Values reflect live scan on startup
+
+Actions:
+
+* `1–9 / shortcut` → open project
+* `A` → add project
+* `D` → delete project (with confirmation)
+* `Q` → quit
+
+---
+
+## Add Project Flow
+
+```text
+Add Project
+
+Name: _
+Path: _
+Shortcut (optional): _
+
+[Enter] Save
+[Esc] Cancel
+```
+
+Rules:
+* ensure no project name duplciation
+* Path must exist
+* Path must be absolute
+* Shortcut must be unique if provided
+
+---
+
+## Project Screen (Repo View)
+
+```text
+Project: AppVideoStudio
+
+1. frontend            +120 / -10   net +110
+2. backend             +80 / -15    net +65
+3. worker              +40 / -6     net +34
+
+Bookmarks                           Commands
+b1. Dashboard                       c1. project cli
+b2. Dev homepage
+
+B. Back                             T. Toggle dirty repos               
+D. Delete project                   R. Rename project
+
+ab. Add bookmark                    ac. Add command
+rb[0-9]. Remove bookmark            rc[0-9]. Remove command
+vb[0-9]. View bookmark details      vc[0-9]. View command details
+```
+
+Rules:
+
+* Always shows all repos even if there are no changes
+* Toggles the display of only dirty repos (off by default)
+* Sorted alphabetically
+
+Actions:
+
+* [0-9]+ → open repo menu
+* `D` → delete project (confirm)
+* `R` → rename project (ensure no duplciation)
+
+---
+
+## Repo Screen
+
+```text
+Repo: frontend
+
++120 / -10   net +110
+
+Actions:
+
+V. View diff
+C. Copy diff
+S. Generate summary
+M. Generate commit message prompt
+MC. Save commit message prompt to clipboard and open your default chat client
+C. Write a commit & push
+B or [Esc]. Go back one menu
+```
+
+Rules:
+
+* Diff is not shown by default (only on demand)
+* Keep this screen minimal and fast
+
+---
+
+## Settings
+
+Actions:
+1. Set API key for generating commit title and descriptions
+2. Set up default default chat client for commit summaries
+3. Customize diff generation message pre-prompt
+4. Customize security review pre-prompt
+
+---
+
+## Diff View
+
+```text
+Repo: frontend (diff)
+
+--- a/file.js
++++ b/file.js
+@@ ...
+
+[truncated]
+
+B. Back
+C. Copy full diff
+S. Generate summary
+```
+
+Rules:
+
+* Large diffs may be truncated visually
+* Copy always uses full diff
+* No inline editing
+
+---
+
+## Delete Project Confirmation
+
+```text
+Delete Project: AppVideoStudio?
+
+This will remove it from Repoteer only.
+No files will be deleted.
+
+Type "yes" to confirm: _
+```
+
+Rules:
+
+* Must require explicit confirmation
+* Never delete filesystem data
+
+---
+
+## Git Data Calculation
+
+For each repo:
+
+* `+` = total lines added
+* `-` = total lines removed
+* untracked files → count as added
+* deleted files → count as removed
+
+Display format:
+
+```text
++240 / -31   net +209
+```
+
+---
+
+## Performance Rules
+
+* Full scan runs on startup
+* No background watchers
+* CLI must remain responsive during navigation
+* Large repos must not block UI completely
+* Startup scan must fail gracefully if a configured project path is missing
+* Missing projects must not crash the CLI
+* Git command failures must be shown as project/repo warnings, not process failures
+* Package smoke-test commands must complete quickly
+
+---
+
+## Keyboard Design
+
+* Max 3 key actions preferred
+* No nested command chains
+* Always provide a visible way to go back (`B`) or Escape key
+* No hidden commands
+
+---
+
+## Output Style
+
+* CLI plain text only
+* No heavy UI frameworks
+* No mouse interaction
+* No color dependency (color optimal if its supported)
+* Must work in a basic terminal
+* Must not require color support
+* Must not require mouse support
+* Must not require a specific terminal emulator
+* Must not require a shell profile modification
+
+---
+
+## Non-Goals (Enforced)
+
+Do not implement:
+
+* staging UI
+* no stubs or mock flows, everything must be real or not included at all
+* multi-repo batch actions
+* submodule handling
+* install-time project scanning
+* install-time config mutation
+* package-manager-specific runtime specific behavior
+
+## Keep clean architecture
+
+Bad shape:
+
+if installedFromHomebrew, store config in /opt/homebrew/...
+
+if installedFromNpm, store config inside the npm global package folder
+
+if installedFromHomebrew, run one startup flow
+
+if installedFromNpm, run a different startup flow
+
+if installedFromHomebrew, assume Node is located at /opt/homebrew/bin/node
+
+if installedFromNpm, assume Node is located somewhere else
+
+The better shape is: once the user types repoteer, the app should follow the same runtime rules everywhere. It can detect the operating system, user home directory, current working directory, environment variables, Git availability, terminal size, and config path. But it should not care which package manager delivered the executable.
+
+## Stay narrow
+
+If a feature pushes toward repo management instead of navigation, reject it.
+
+If a feature makes packaging harder without improving the core CLI, reject it.
+
+Package managers should handle installation. Repoteer should handle Repoteer.
+
+---
+
+## Future Extensions (UI Reserved)
+
+Possible additions:
+
+* toggle: show clean repos
+* sort modes (by name, activity, recency)
+* AI summary inline preview
+* saved commands per project
+* bookmarks panel
+
+These must not break the core navigation model.
