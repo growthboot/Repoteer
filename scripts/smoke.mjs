@@ -4,6 +4,7 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { Git } from '../src/modules/Git.js';
 import { Scanner } from '../src/modules/Scanner.js';
+import { formatTable } from '../src/utils/table.js';
 import { validateProjectInput } from '../src/utils/validation.js';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
@@ -92,8 +93,17 @@ function smokeQuitPath() {
   assert(result.status === 0, result.stderr || 'quit path failed');
   assert(result.stdout.includes('Repoteer'), 'quit path did not render title');
   assert(result.stdout.includes('No projects added.'), 'quit path did not render empty state');
+  assert(result.stdout.includes('Action: '), 'quit path did not prompt for action');
   assert(Array.isArray(readProjects(home)), 'quit path did not create projects array');
   assert(readProjects(home).length === 0, 'quit path should not add projects');
+}
+
+function smokePipedMultiCharacterActionPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const result = runApp('bo2\nq\n', home);
+
+  assert(result.status === 0, result.stderr || 'multi-character action path failed');
+  assert(countOccurrences(result.stdout, 'Action: ') === 2, 'multi-character action should rerender before quit');
 }
 
 function smokeAddProjectPath() {
@@ -104,7 +114,8 @@ function smokeAddProjectPath() {
 
   assert(result.status === 0, result.stderr || 'add project path failed');
   assert(result.stdout.includes('Project saved.'), 'add project path did not save');
-  assert(result.stdout.includes('1.  Smoke Project'), 'add project path did not render numbered project row');
+  assert(/^1\.\s+Smoke Project/m.test(result.stdout), 'add project path did not render numbered project row');
+  assert(/^1\.\s+Smoke Project\s+\+0 \/ -0\s+\+0\s+0 repos\s+N\/A\s+\[z\]$/m.test(result.stdout), 'add project path did not render aligned project row shape');
   assert(result.stdout.includes('+0 / -0'), 'add project path did not render zero change totals');
   assert(result.stdout.includes('+0'), 'add project path did not render zero net');
   assert(result.stdout.includes('0 repos'), 'add project path did not render repo count');
@@ -115,6 +126,18 @@ function smokeAddProjectPath() {
   assert(projects[0].name === 'Smoke Project', 'saved project name mismatch');
   assert(projects[0].path === projectPath, 'saved project path mismatch');
   assert(projects[0].shortcut === 'z', 'saved project shortcut mismatch');
+}
+
+function smokeAddProjectCancelPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-project-'));
+  const input = ['a', 'q', 'q'].join('\n') + '\n';
+  const result = runApp(input, home);
+
+  assert(result.status === 0, result.stderr || 'add project cancel path failed');
+  assert(result.stdout.includes('Add Project'), 'add project cancel path did not open add page');
+  assert(!result.stdout.includes('Project saved.'), 'add project cancel path should not save');
+  assert(readProjects(home).length === 0, 'add project cancel path should not add projects');
 }
 
 function smokeGitRepoDiscovery() {
@@ -203,11 +226,30 @@ function smokeDuplicateValidation() {
   assert(result.error === 'Project name already exists.', 'duplicate validation error mismatch');
 }
 
+function smokeTableFormatting() {
+  const rows = formatTable([
+    ['', 'Project', '+ / -', 'net', 'modified', 'last commit', ''],
+    ['1.', 'Repoteer', '+292 / -18', '+274', '1 repo', '1h ago', '[-]'],
+    ['2.', 'ContextScript', '+2709 / -1007', '+1702', '5 repos', '1d ago', '[-]']
+  ]);
+
+  assert(rows[1].indexOf('+274') === rows[2].indexOf('+1702'), 'table should align net column');
+  assert(rows[1].indexOf('1 repo') === rows[2].indexOf('5 repos'), 'table should align modified column');
+  assert(rows[1].indexOf('1h ago') === rows[2].indexOf('1d ago'), 'table should align last commit column');
+}
+
+function countOccurrences(text, value) {
+  return text.split(value).length - 1;
+}
+
 checkSyntax();
 smokeQuitPath();
+smokePipedMultiCharacterActionPath();
 smokeAddProjectPath();
+smokeAddProjectCancelPath();
 smokeGitRepoDiscovery();
 smokeScannerMissingProjectPath();
 smokeDuplicateValidation();
+smokeTableFormatting();
 
 console.log('smoke ok');

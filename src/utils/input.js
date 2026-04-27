@@ -1,5 +1,5 @@
 import fs from 'fs';
-import readline from 'readline/promises';
+import { createInterface } from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 
 let rl = null;
@@ -15,19 +15,27 @@ function getPipedLines() {
 
 function getReadline() {
   if (!rl) {
-    rl = readline.createInterface({ input, output });
+    rl = createInterface({ input, output });
   }
 
   return rl;
 }
 
-export async function promptLine(label) {
+async function readLine(label) {
   if (!input.isTTY) {
     output.write(label);
     return getPipedLines().shift() ?? '';
   }
 
   return await getReadline().question(label);
+}
+
+export async function promptLine(label) {
+  return await readLine(label);
+}
+
+export async function promptAction(label) {
+  return await readLine(label);
 }
 
 export function closeInput() {

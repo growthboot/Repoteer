@@ -1,5 +1,6 @@
-import { promptLine } from '../utils/input.js';
+import { promptAction } from '../utils/input.js';
 import { formatShortcut } from '../utils/format.js';
+import { formatTable } from '../utils/table.js';
 
 export class ProjectsPage {
   constructor({ runtime, router }) {
@@ -18,7 +19,10 @@ export class ProjectsPage {
     if (projects.length === 0) {
       console.log('No projects added.');
     } else {
-      console.log('   Project             + / -          net      modified       last commit');
+      const rows = [
+        ['', 'Project', '+ / -', 'net', 'modified', 'last commit', '']
+      ];
+
       projects.forEach((project, index) => {
         const label = String(index + 1) + '.';
         const shortcut = formatShortcut(project.shortcut);
@@ -26,8 +30,16 @@ export class ProjectsPage {
         const net = this.formatNet(project);
         const modified = project.warning ? 'warning' : this.formatRepoCount(project.repos.length);
         const lastCommit = this.formatLastCommit(project);
-        console.log(label.padEnd(4) + project.name.padEnd(20) + changes.padEnd(15) + net.padEnd(9) + modified.padEnd(15) + lastCommit + '  ' + shortcut);
 
+        rows.push([label, project.name, changes, net, modified, lastCommit, shortcut]);
+      });
+
+      const formattedRows = formatTable(rows);
+      console.log(formattedRows[0]);
+      console.log('');
+      formattedRows.slice(1).forEach((row) => console.log(row));
+
+      projects.forEach((project) => {
         if (project.warning) {
           console.log('    ' + project.warning);
         }
@@ -39,7 +51,8 @@ export class ProjectsPage {
     console.log('Q. Quit');
     console.log('');
 
-    const answer = await promptLine('Action: ');
+    const answer = await promptAction('Action: ');
+
     const key = answer.trim().toLowerCase();
 
     if (key === 'a') {

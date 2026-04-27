@@ -10,7 +10,7 @@ export class AddProjectPage {
     console.clear();
     console.log('Add Project');
     console.log('');
-    console.log('Type "esc" to cancel.');
+    console.log('Type "q" to cancel.');
     console.log('');
 
     const name = await this.ask('Name: ');
@@ -45,7 +45,7 @@ export class AddProjectPage {
   async ask(label) {
     const value = await promptLine(label);
 
-    if (value.trim().toLowerCase() === 'esc') {
+    if (value.trim().toLowerCase() === 'q') {
       await this.router.back();
       return null;
     }
