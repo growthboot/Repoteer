@@ -258,7 +258,7 @@ function smokeDuplicateValidation() {
 
 function smokeTableFormatting() {
   const rows = formatTable([
-    ['', 'Project', '+ / -', 'net', 'modified', 'last commit', ''],
+    ['', 'Project', '+ / -', 'net', 'modified', 'last commit', 'shortcut'],
     ['1.', 'Repoteer', '+292 / -18', '+274', '1 repo', '1h ago', '[-]'],
     ['2.', 'ContextScript', '+2709 / -1007', '+1702', '5 repos', '1d ago', '[-]']
   ]);

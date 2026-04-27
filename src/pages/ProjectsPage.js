@@ -22,7 +22,7 @@ export class ProjectsPage {
       console.log(color.dim('No projects added.'));
     } else {
       const rows = [
-        ['', color.bold('Project'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit'), '']
+        ['', color.bold('Project'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit'), color.bold('shortcut')]
       ];
 
       projects.forEach((project, index) => {
