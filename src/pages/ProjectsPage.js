@@ -12,7 +12,8 @@ export class ProjectsPage {
     console.log('Repoteer');
     console.log('');
 
-    const projects = this.runtime.projectManager.listProjects();
+    const snapshot = this.runtime.refreshSnapshot();
+    const projects = snapshot.projects;
 
     if (projects.length === 0) {
       console.log('No projects added.');
@@ -21,7 +22,12 @@ export class ProjectsPage {
       projects.forEach((project, index) => {
         const label = String(index + 1) + '.';
         const shortcut = formatShortcut(project.shortcut);
-        console.log(label.padEnd(4) + project.name.padEnd(20) + 'N/A'.padEnd(15) + 'N/A'.padEnd(9) + 'N/A'.padEnd(15) + 'N/A' + '  ' + shortcut);
+        const modified = project.warning ? 'warning' : this.formatRepoCount(project.repos.length);
+        console.log(label.padEnd(4) + project.name.padEnd(20) + 'N/A'.padEnd(15) + 'N/A'.padEnd(9) + modified.padEnd(15) + 'N/A' + '  ' + shortcut);
+
+        if (project.warning) {
+          console.log('    ' + project.warning);
+        }
       });
     }
 
@@ -43,5 +49,9 @@ export class ProjectsPage {
     }
 
     await this.router.replace('projects');
+  }
+
+  formatRepoCount(count) {
+    return String(count) + ' ' + (count === 1 ? 'repo' : 'repos');
   }
 }

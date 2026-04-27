@@ -2,6 +2,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
+import { Git } from '../src/modules/Git.js';
+import { Scanner } from '../src/modules/Scanner.js';
 import { validateProjectInput } from '../src/utils/validation.js';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
@@ -37,6 +39,28 @@ function checkSyntax() {
 
     assert(result.status === 0, result.stderr || result.stdout || 'syntax check failed: ' + file);
   }
+}
+
+function gitAvailable() {
+  const result = spawnSync('git', ['--version'], {
+    encoding: 'utf8'
+  });
+
+  return result.status === 0;
+}
+
+function runGit(args, cwd) {
+  const result = spawnSync('git', args, {
+    cwd,
+    encoding: 'utf8'
+  });
+
+  assert(result.status === 0, result.stderr || result.stdout || 'git command failed: git ' + args.join(' '));
+}
+
+function initGitRepo(repoPath) {
+  fs.mkdirSync(repoPath, { recursive: true });
+  runGit(['init'], repoPath);
 }
 
 function runApp(input, home) {
@@ -76,6 +100,7 @@ function smokeAddProjectPath() {
   assert(result.status === 0, result.stderr || 'add project path failed');
   assert(result.stdout.includes('Project saved.'), 'add project path did not save');
   assert(result.stdout.includes('1.  Smoke Project'), 'add project path did not render numbered project row');
+  assert(result.stdout.includes('0 repos'), 'add project path did not render repo count');
   assert(result.stdout.includes('N/A'), 'add project path did not render placeholder scan data');
 
   const projects = readProjects(home);
@@ -83,6 +108,58 @@ function smokeAddProjectPath() {
   assert(projects[0].name === 'Smoke Project', 'saved project name mismatch');
   assert(projects[0].path === projectPath, 'saved project path mismatch');
   assert(projects[0].shortcut === 'z', 'saved project shortcut mismatch');
+}
+
+function smokeGitRepoDiscovery() {
+  if (!gitAvailable()) {
+    console.log('smoke git discovery skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-project-'));
+
+  initGitRepo(path.join(projectPath, 'api'));
+  initGitRepo(path.join(projectPath, 'web'));
+
+  const git = new Git();
+  const scanner = new Scanner(git);
+  const snapshot = scanner.scanProjects([
+    {
+      name: 'Smoke Project',
+      path: projectPath,
+      shortcut: 'z'
+    }
+  ]);
+
+  assert(snapshot.projects.length === 1, 'scanner should return one project');
+  assert(snapshot.projects[0].repos.length === 2, 'scanner should discover two child repos');
+  assert(snapshot.projects[0].repos[0].name === 'api', 'scanner should sort repos by name');
+  assert(snapshot.projects[0].repos[1].name === 'web', 'scanner should sort repos by name');
+
+  const input = ['a', 'Smoke Project', projectPath, 'z', '', 'q'].join('\n') + '\n';
+  const result = runApp(input, home);
+
+  assert(result.status === 0, result.stderr || 'git discovery app path failed');
+  assert(result.stdout.includes('2 repos'), 'projects page did not render discovered repo count');
+}
+
+function smokeScannerMissingProjectPath() {
+  const git = new Git();
+  const scanner = new Scanner(git);
+  const missingPath = path.join(os.tmpdir(), 'repoteer-smoke-missing-project');
+
+  const snapshot = scanner.scanProjects([
+    {
+      name: 'Missing Project',
+      path: missingPath,
+      shortcut: null
+    }
+  ]);
+
+  assert(snapshot.projects.length === 1, 'scanner should return missing project');
+  assert(snapshot.projects[0].warning === 'Project path does not exist.', 'scanner missing path warning mismatch');
+  assert(snapshot.projects[0].repos.length === 0, 'scanner missing path should have no repos');
 }
 
 function smokeDuplicateValidation() {
@@ -107,6 +184,8 @@ function smokeDuplicateValidation() {
 checkSyntax();
 smokeQuitPath();
 smokeAddProjectPath();
+smokeGitRepoDiscovery();
+smokeScannerMissingProjectPath();
 smokeDuplicateValidation();
 
 console.log('smoke ok');
