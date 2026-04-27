@@ -11,9 +11,9 @@ Repoteer helps you answer:
 * Which projects are active right now?
 * Where are the largest changes?
 * What should I review first?
-* What other tools do i have related to a project?
+* What tools, commands, and context are tied to this project?
 
-Repoteer is not a Git management replacement. It sits above Git and helps you move through your project work faster.
+Repoteer is not a repo-level Git UI like lazygit. It sits above your repositories and helps you move across projects.
 
 ---
 
@@ -47,16 +47,16 @@ You have multiple projects, each with multiple repos, all changing at the same t
 
 There’s no good way to answer:
 
-* What changed today across many projects?
+* What changed today across all my projects?
 * Which project is actually active?
 * Where should I look first?
-* What needs to get a commit right now?
+* What needs to be committed right now?
 
-You're lacking a git projects overview.
+You’re missing a clear, project-level view.
 
 Repoteer fixes that.
 
-Open it, and you see across all your projects where the changes are, and can drill straight into what matters.
+Open it, and you immediately see where changes are happening across your projects, and can drill straight into what matters.
 
 ---
 
@@ -83,13 +83,17 @@ Repoteer is:
 * Fast
 * Local-only
 * Project-oriented
-* Focused on git awareness
+* Focused on project-level git awareness
 
 Repoteer is not:
 
-* A general Git manager
+* A repo-level Git UI (like lazygit)
 * A batch automation tool
-* A full TUI like lazygit
+* A full Git management interface
+
+Another way to look at it:
+lazygit → operate inside a repo
+Repoteer → decide which project / repo to even open
 
 ---
 
