@@ -50,6 +50,7 @@ export class ProjectsPage {
 
     console.log('');
     console.log(color.bold('A.') + ' Add project');
+    console.log(color.bold('S.') + ' Settings');
     console.log(color.bold('Q.') + ' Quit');
     console.log('');
 
@@ -59,6 +60,11 @@ export class ProjectsPage {
 
     if (key === 'a') {
       await this.router.open('addProject');
+      return;
+    }
+
+    if (key === 's') {
+      await this.router.open('settings');
       return;
     }
 

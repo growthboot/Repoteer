@@ -122,6 +122,20 @@ function smokeNoColorBootFlagPath() {
   assert(!/\u001b\[[0-9;]*m/.test(result.stdout), '--no-color path emitted ANSI color');
 }
 
+function smokeSettingsToggleColorPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const input = ['s', 't', '', 'b', 'q'].join('\n') + '\n';
+  const result = runApp(input, home);
+
+  assert(result.status === 0, result.stderr || 'settings toggle color path failed');
+  assert(result.stdout.includes('S. Settings'), 'projects page did not render settings action');
+  assert(result.stdout.includes('Settings'), 'settings page did not render title');
+  assert(result.stdout.includes('Color: On'), 'settings page did not render color on state');
+  assert(result.stdout.includes('Color disabled.'), 'settings page did not confirm disabled color');
+  assert(result.stdout.includes('Color: Off'), 'settings page did not render color off state');
+  assert(readSettings(home).color === false, 'settings toggle did not persist color=false');
+}
+
 function smokeAddProjectPath() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-project-'));
@@ -269,6 +283,7 @@ function countOccurrences(text, value) {
 checkSyntax();
 smokeQuitPath();
 smokeNoColorBootFlagPath();
+smokeSettingsToggleColorPath();
 smokePipedMultiCharacterActionPath();
 smokeAddProjectPath();
 smokeAddProjectCancelPath();

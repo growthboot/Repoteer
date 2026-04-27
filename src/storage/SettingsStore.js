@@ -22,4 +22,15 @@ export class SettingsStore {
       ...settings
     };
   }
+
+  setColor(enabled) {
+    const next = {
+      ...this.get(),
+      color: enabled === true
+    };
+
+    this.store.write(next);
+
+    return next;
+  }
 }

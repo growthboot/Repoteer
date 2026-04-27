@@ -1,6 +1,7 @@
 import { Router } from './router/Router.js';
 import { ProjectsPage } from './pages/ProjectsPage.js';
 import { AddProjectPage } from './pages/AddProjectPage.js';
+import { SettingsPage } from './pages/SettingsPage.js';
 import { ProjectsStore } from './storage/ProjectsStore.js';
 import { SettingsStore } from './storage/SettingsStore.js';
 import { ProjectManager } from './modules/ProjectManager.js';
@@ -18,9 +19,10 @@ export async function main(argv = process.argv.slice(2)) {
   const projectManager = new ProjectManager(projectsStore);
   const git = new Git();
   const scanner = new Scanner(git);
+  const forceColorDisabled = argv.includes('--no-color');
   const color = createColor({
     enabled: settings.color !== false,
-    forceDisabled: argv.includes('--no-color')
+    forceDisabled: forceColorDisabled
   });
 
   const runtime = {
@@ -36,6 +38,13 @@ export async function main(argv = process.argv.slice(2)) {
     refreshSnapshot() {
       this.snapshot = this.scanner.scanProjects(this.projectManager.listProjects());
       return this.snapshot;
+    },
+    refreshColor() {
+      this.color = createColor({
+        enabled: this.settings.color !== false,
+        forceDisabled: forceColorDisabled
+      });
+      return this.color;
     }
   };
 
@@ -43,7 +52,8 @@ export async function main(argv = process.argv.slice(2)) {
 
   const router = new Router(runtime, {
     projects: ProjectsPage,
-    addProject: AddProjectPage
+    addProject: AddProjectPage,
+    settings: SettingsPage
   });
 
   await router.open('projects');
