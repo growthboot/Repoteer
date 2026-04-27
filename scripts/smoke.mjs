@@ -5,6 +5,7 @@ import { spawnSync } from 'child_process';
 import { Git } from '../src/modules/Git.js';
 import { Scanner } from '../src/modules/Scanner.js';
 import { formatTable } from '../src/utils/table.js';
+import { formatActionColumns } from '../src/utils/menu.js';
 import { stripAnsi } from '../src/utils/color.js';
 import { validateProjectInput } from '../src/utils/validation.js';
 
@@ -334,6 +335,20 @@ function smokeTableFormatting() {
   ]);
 
   assert(stripAnsi(coloredRows[1]).indexOf('ok') === stripAnsi(coloredRows[2]).indexOf('failed'), 'table should align ANSI-colored cells');
+
+  const actionRows = formatActionColumns([
+    '\u001b[1mT.\u001b[22m Hide projects without code changes',
+    '\u001b[1mR.\u001b[22m Refresh',
+    '\u001b[1mA.\u001b[22m Add project',
+    '\u001b[1mS.\u001b[22m Settings',
+    '\u001b[1mQ.\u001b[22m Quit'
+  ]);
+
+  assert(actionRows.length === 3, 'action columns should pair actions across rows');
+  assert(stripAnsi(actionRows[0]).includes('R. Refresh'), 'action columns should render first right action');
+  assert(stripAnsi(actionRows[1]).includes('S. Settings'), 'action columns should render second right action');
+  assert(stripAnsi(actionRows[2]) === 'Q. Quit', 'action columns should render odd trailing action alone');
+  assert(stripAnsi(actionRows[0]).indexOf('R. Refresh') === stripAnsi(actionRows[1]).indexOf('S. Settings'), 'action columns should align right column');
 }
 
 function countOccurrences(text, value) {

@@ -1,6 +1,7 @@
 import { promptAction } from '../utils/input.js';
 import { formatShortcut } from '../utils/format.js';
 import { formatTable } from '../utils/table.js';
+import { formatActionColumns } from '../utils/menu.js';
 
 export class ProjectsPage {
   constructor({ runtime, router }) {
@@ -53,11 +54,13 @@ export class ProjectsPage {
     }
 
     console.log('');
-    console.log(color.bold('T.') + ' ' + (hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes'));
-    console.log(color.bold('R.') + ' Refresh');
-    console.log(color.bold('A.') + ' Add project');
-    console.log(color.bold('S.') + ' Settings');
-    console.log(color.bold('Q.') + ' Quit');
+    formatActionColumns([
+      color.bold('T.') + ' ' + (hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes'),
+      color.bold('R.') + ' Refresh',
+      color.bold('A.') + ' Add project',
+      color.bold('S.') + ' Settings',
+      color.bold('Q.') + ' Quit'
+    ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
