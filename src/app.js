@@ -2,25 +2,36 @@ import { Router } from './router/Router.js';
 import { ProjectsPage } from './pages/ProjectsPage.js';
 import { AddProjectPage } from './pages/AddProjectPage.js';
 import { ProjectsStore } from './storage/ProjectsStore.js';
+import { SettingsStore } from './storage/SettingsStore.js';
 import { ProjectManager } from './modules/ProjectManager.js';
 import { Git } from './modules/Git.js';
 import { Scanner } from './modules/Scanner.js';
 import { resolveRuntimePaths } from './config/paths.js';
+import { createColor } from './utils/color.js';
 import { closeInput } from './utils/input.js';
 
-export async function main() {
+export async function main(argv = process.argv.slice(2)) {
   const paths = resolveRuntimePaths();
   const projectsStore = new ProjectsStore(paths.storageDir);
+  const settingsStore = new SettingsStore(paths.storageDir);
+  const settings = settingsStore.get();
   const projectManager = new ProjectManager(projectsStore);
   const git = new Git();
   const scanner = new Scanner(git);
+  const color = createColor({
+    enabled: settings.color !== false,
+    forceDisabled: argv.includes('--no-color')
+  });
 
   const runtime = {
     paths,
+    settings,
+    settingsStore,
     projectsStore,
     projectManager,
     git,
     scanner,
+    color,
     snapshot: { projects: [] },
     refreshSnapshot() {
       this.snapshot = this.scanner.scanProjects(this.projectManager.listProjects());

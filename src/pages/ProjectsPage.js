@@ -9,26 +9,28 @@ export class ProjectsPage {
   }
 
   async show() {
+    const color = this.runtime.color;
+
     console.clear();
-    console.log('Repoteer');
+    console.log(color.bold('Repoteer'));
     console.log('');
 
     const snapshot = this.runtime.refreshSnapshot();
     const projects = snapshot.projects;
 
     if (projects.length === 0) {
-      console.log('No projects added.');
+      console.log(color.dim('No projects added.'));
     } else {
       const rows = [
-        ['', 'Project', '+ / -', 'net', 'modified', 'last commit', '']
+        ['', color.bold('Project'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit'), '']
       ];
 
       projects.forEach((project, index) => {
         const label = String(index + 1) + '.';
-        const shortcut = formatShortcut(project.shortcut);
+        const shortcut = color.dim(formatShortcut(project.shortcut));
         const changes = this.formatChanges(project);
         const net = this.formatNet(project);
-        const modified = project.warning ? 'warning' : this.formatRepoCount(project.repos.length);
+        const modified = project.warning ? color.yellow('warning') : this.formatRepoCount(project.repos.length);
         const lastCommit = this.formatLastCommit(project);
 
         rows.push([label, project.name, changes, net, modified, lastCommit, shortcut]);
@@ -41,14 +43,14 @@ export class ProjectsPage {
 
       projects.forEach((project) => {
         if (project.warning) {
-          console.log('    ' + project.warning);
+          console.log('    ' + color.yellow(project.warning));
         }
       });
     }
 
     console.log('');
-    console.log('A. Add project');
-    console.log('Q. Quit');
+    console.log(color.bold('A.') + ' Add project');
+    console.log(color.bold('Q.') + ' Quit');
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -72,7 +74,8 @@ export class ProjectsPage {
       return 'N/A';
     }
 
-    return '+' + String(project.totals.added) + ' / -' + String(project.totals.removed);
+    const color = this.runtime.color;
+    return color.green('+' + String(project.totals.added)) + ' / ' + color.red('-' + String(project.totals.removed));
   }
 
   formatNet(project) {
@@ -80,8 +83,11 @@ export class ProjectsPage {
       return 'N/A';
     }
 
+    const color = this.runtime.color;
     const prefix = project.totals.net >= 0 ? '+' : '';
-    return prefix + String(project.totals.net);
+    const value = prefix + String(project.totals.net);
+
+    return project.totals.net < 0 ? color.red(value) : color.green(value);
   }
 
   formatLastCommit(project) {

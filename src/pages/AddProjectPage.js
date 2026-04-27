@@ -7,10 +7,12 @@ export class AddProjectPage {
   }
 
   async show() {
+    const color = this.runtime.color;
+
     console.clear();
-    console.log('Add Project');
+    console.log(color.bold('Add Project'));
     console.log('');
-    console.log('Type "q" to cancel.');
+    console.log(color.dim('Type "q" to cancel.'));
     console.log('');
 
     const name = await this.ask('Name: ');
@@ -30,14 +32,14 @@ export class AddProjectPage {
 
     if (!result.ok) {
       console.log('');
-      console.log(result.error);
+      console.log(color.yellow(result.error));
       await promptLine('Press Enter to continue.');
       await this.router.replace('addProject');
       return;
     }
 
     console.log('');
-    console.log('Project saved.');
+    console.log(color.green('Project saved.'));
     await promptLine('Press Enter to continue.');
     await this.router.back();
   }

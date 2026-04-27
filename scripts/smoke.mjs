@@ -5,6 +5,7 @@ import { spawnSync } from 'child_process';
 import { Git } from '../src/modules/Git.js';
 import { Scanner } from '../src/modules/Scanner.js';
 import { formatTable } from '../src/utils/table.js';
+import { stripAnsi } from '../src/utils/color.js';
 import { validateProjectInput } from '../src/utils/validation.js';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
@@ -69,8 +70,8 @@ function commitAll(repoPath, message) {
   runGit(['-c', 'user.name=Repoteer Smoke', '-c', 'user.email=smoke@example.com', 'commit', '-m', message], repoPath);
 }
 
-function runApp(input, home) {
-  return spawnSync(process.execPath, ['src/app.js'], {
+function runApp(input, home, args = []) {
+  return spawnSync(process.execPath, ['src/app.js', ...args], {
     cwd: root,
     input,
     encoding: 'utf8',
@@ -86,6 +87,11 @@ function readProjects(home) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+function readSettings(home) {
+  const file = path.join(home, '.repoteer', 'storage', 'settings.json');
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
 function smokeQuitPath() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
   const result = runApp('q\n', home);
@@ -96,6 +102,7 @@ function smokeQuitPath() {
   assert(result.stdout.includes('Action: '), 'quit path did not prompt for action');
   assert(Array.isArray(readProjects(home)), 'quit path did not create projects array');
   assert(readProjects(home).length === 0, 'quit path should not add projects');
+  assert(readSettings(home).color === true, 'quit path did not create default color setting');
 }
 
 function smokePipedMultiCharacterActionPath() {
@@ -104,6 +111,15 @@ function smokePipedMultiCharacterActionPath() {
 
   assert(result.status === 0, result.stderr || 'multi-character action path failed');
   assert(countOccurrences(result.stdout, 'Action: ') === 2, 'multi-character action should rerender before quit');
+}
+
+function smokeNoColorBootFlagPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const result = runApp('q\n', home, ['--no-color']);
+
+  assert(result.status === 0, result.stderr || '--no-color path failed');
+  assert(result.stdout.includes('Repoteer'), '--no-color path did not render title');
+  assert(!/\u001b\[[0-9;]*m/.test(result.stdout), '--no-color path emitted ANSI color');
 }
 
 function smokeAddProjectPath() {
@@ -236,6 +252,14 @@ function smokeTableFormatting() {
   assert(rows[1].indexOf('+274') === rows[2].indexOf('+1702'), 'table should align net column');
   assert(rows[1].indexOf('1 repo') === rows[2].indexOf('5 repos'), 'table should align modified column');
   assert(rows[1].indexOf('1h ago') === rows[2].indexOf('1d ago'), 'table should align last commit column');
+
+  const coloredRows = formatTable([
+    ['Name', 'Status'],
+    ['Short', '\u001b[32mok\u001b[39m'],
+    ['Much Longer', '\u001b[31mfailed\u001b[39m']
+  ]);
+
+  assert(stripAnsi(coloredRows[1]).indexOf('ok') === stripAnsi(coloredRows[2]).indexOf('failed'), 'table should align ANSI-colored cells');
 }
 
 function countOccurrences(text, value) {
@@ -244,6 +268,7 @@ function countOccurrences(text, value) {
 
 checkSyntax();
 smokeQuitPath();
+smokeNoColorBootFlagPath();
 smokePipedMultiCharacterActionPath();
 smokeAddProjectPath();
 smokeAddProjectCancelPath();
