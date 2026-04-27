@@ -22,8 +22,11 @@ export class ProjectsPage {
       projects.forEach((project, index) => {
         const label = String(index + 1) + '.';
         const shortcut = formatShortcut(project.shortcut);
+        const changes = this.formatChanges(project);
+        const net = this.formatNet(project);
         const modified = project.warning ? 'warning' : this.formatRepoCount(project.repos.length);
-        console.log(label.padEnd(4) + project.name.padEnd(20) + 'N/A'.padEnd(15) + 'N/A'.padEnd(9) + modified.padEnd(15) + 'N/A' + '  ' + shortcut);
+        const lastCommit = this.formatLastCommit(project);
+        console.log(label.padEnd(4) + project.name.padEnd(20) + changes.padEnd(15) + net.padEnd(9) + modified.padEnd(15) + lastCommit + '  ' + shortcut);
 
         if (project.warning) {
           console.log('    ' + project.warning);
@@ -49,6 +52,27 @@ export class ProjectsPage {
     }
 
     await this.router.replace('projects');
+  }
+
+  formatChanges(project) {
+    if (!project.totals) {
+      return 'N/A';
+    }
+
+    return '+' + String(project.totals.added) + ' / -' + String(project.totals.removed);
+  }
+
+  formatNet(project) {
+    if (!project.totals) {
+      return 'N/A';
+    }
+
+    const prefix = project.totals.net >= 0 ? '+' : '';
+    return prefix + String(project.totals.net);
+  }
+
+  formatLastCommit(project) {
+    return project.totals?.lastCommitAgo ?? 'N/A';
   }
 
   formatRepoCount(count) {
