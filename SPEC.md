@@ -27,26 +27,37 @@ Shown immediately on startup after scanning.
 Repoteer
 
    Project             + / -          net      modifed       last commit
+
+Pinned Projects
 1. AppVideoStudio      +240 / -31     +209     2 repos       2d ago
-2. WebCull             +12 / -4       +8       1 repo        24m ago
-3. ContextScript       +884 / -120    +764     5 repos       2h ago
+2. ContextScript       +884 / -120    +764     5 repos       2h ago
+
+Projects
+3. WebCull             +12 / -4       +8       1 repo        24m ago
 
 A. Add project
+V. View archive
 S. Settings
 Q. Quit
 ```
 
 Rules:
 
-* Projects listed by number
+* Active projects listed by one shared number sequence across pinned and unpinned groups
 * Shortcut keys (if defined) must be letters and not main navigation letters (navigation is priority)
-* Always sorted by change volume (largest first)
+* Pinned projects appear above unpinned projects in a separate group
+* Pinned projects are sorted alphabetically
+* Unpinned projects are sorted by change volume (largest first)
+* Archived projects are hidden from this view
 * Values reflect live scan on startup
 
 Actions:
 
 * `1–9 / shortcut` → open project
+* `[0-9]+p` → pin or unpin project
+* `[0-9]+a` → archive project
 * `A` → add project
+* `V` → view archive
 * `D` → delete project (with confirmation)
 * `Q` → quit
 
@@ -269,6 +280,38 @@ Rules:
 
 * Must require explicit confirmation
 * Never delete filesystem data
+
+---
+
+## Archived Projects
+
+Opened from the Project View.
+
+```text
+Archived Projects
+
+   Project             path
+1. OldClient           /Users/me/dev/OldClient
+2. Prototype           /Users/me/dev/Prototype
+
+B. Back
+D. Delete project
+U. Unarchive project
+```
+
+Rules:
+
+* Archived projects are hidden from the Project View
+* Archived projects do not participate in startup scan totals
+* Archived projects are listed by number
+* Archived projects are sorted alphabetically
+* The archive view only supports unarchive, delete, and back actions
+
+Actions:
+
+* `[0-9]+u` → unarchive project
+* `[0-9]+d` → delete project (with confirmation)
+* `B` → back
 
 ---
 
