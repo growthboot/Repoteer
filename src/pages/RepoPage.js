@@ -50,6 +50,8 @@ export class RepoPage {
     formatActionColumns([
       color.bold('V.') + ' View full diff',
       color.bold('C.') + ' Copy full diff',
+      color.bold('A.') + ' Commit review',
+      color.bold('E.') + ' Security review',
       color.bold('M.') + ' Generate commit',
       color.bold('H.') + ' Hotfix commit',
       color.bold('P.') + ' Write a commit & push',
@@ -103,6 +105,16 @@ export class RepoPage {
 
     if (key === 'c') {
       await this.copyFullDiff(repo.path);
+      return;
+    }
+
+    if (key === 'a') {
+      await this.openAiTool(project, repo, 'commit_review');
+      return;
+    }
+
+    if (key === 'e') {
+      await this.openAiTool(project, repo, 'security_review');
       return;
     }
 
@@ -185,6 +197,16 @@ export class RepoPage {
       title: payload.title,
       body: payload.body,
       pushAfterCommit
+    });
+  }
+
+  async openAiTool(project, repo, toolId) {
+    await this.runtime.aiGateway.openRepoTool(this.router, {
+      toolId,
+      project,
+      repo,
+      settings: this.runtime.settings,
+      returnPage: 'repo'
     });
   }
 

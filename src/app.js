@@ -51,7 +51,7 @@ export async function main(argv = process.argv.slice(2)) {
   const clipboard = new Clipboard();
   const browserOpener = new BrowserOpener();
   const localAiClient = new LocalAiClient();
-  const aiGateway = new AiGateway({ aiPromptManager, clipboard, browserOpener, localAiClient });
+  const aiGateway = new AiGateway({ aiPromptManager, aiDiffBuilder, clipboard, browserOpener, localAiClient });
   const forceColorDisabled = argv.includes('--no-color');
   const color = createColor({
     enabled: settings.color !== false,

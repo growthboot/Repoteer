@@ -39,6 +39,8 @@ export class DiffPage {
     console.log('');
     console.log(color.bold('B.') + ' Back');
     console.log(color.bold('C.') + ' Copy full diff');
+    console.log(color.bold('S.') + ' Generate summary');
+    console.log(color.bold('E.') + ' Security review');
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -51,6 +53,16 @@ export class DiffPage {
 
     if (key === 'c') {
       await this.copyFullDiff(result);
+      return;
+    }
+
+    if (key === 's' && repo) {
+      await this.openAiTool(repo, 'diff_summary');
+      return;
+    }
+
+    if (key === 'e' && repo) {
+      await this.openAiTool(repo, 'security_review');
       return;
     }
 
@@ -88,5 +100,15 @@ export class DiffPage {
     const project = snapshot.projects.find((candidate) => candidate.name === this.params.projectName) ?? null;
 
     return project?.repos.find((candidate) => candidate.path === this.params.repoPath) ?? null;
+  }
+
+  async openAiTool(repo, toolId) {
+    await this.runtime.aiGateway.openRepoTool(this.router, {
+      toolId,
+      projectName: this.params.projectName,
+      repo,
+      settings: this.runtime.settings,
+      returnPage: 'diff'
+    });
   }
 }

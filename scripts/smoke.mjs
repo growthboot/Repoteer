@@ -4,6 +4,7 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { Git } from '../src/modules/Git.js';
 import { Scanner } from '../src/modules/Scanner.js';
+import { AiGateway } from '../src/modules/AiGateway.js';
 import { AiPromptManager } from '../src/modules/AiPromptManager.js';
 import { AiDiffBuilder } from '../src/modules/AiDiffBuilder.js';
 import { PromptsStore } from '../src/storage/PromptsStore.js';
@@ -74,6 +75,20 @@ function initGitRepo(repoPath) {
 function commitAll(repoPath, message) {
   runGit(['add', '.'], repoPath);
   runGit(['-c', 'user.name=Repoteer Smoke', '-c', 'user.email=smoke@example.com', 'commit', '-m', message], repoPath);
+}
+
+function readGitState(repoPath) {
+  const run = (args) => spawnSync('git', args, {
+    cwd: repoPath,
+    encoding: 'utf8'
+  });
+
+  return {
+    head: run(['rev-parse', 'HEAD']).stdout.trim(),
+    status: run(['status', '--porcelain']).stdout,
+    stagedDiff: run(['diff', '--cached', '--no-ext-diff']).stdout,
+    unstagedDiff: run(['diff', '--no-ext-diff']).stdout
+  };
 }
 
 function runApp(input, home, args = []) {
@@ -1219,6 +1234,79 @@ function smokeRepoPageOpenAndDiffPath() {
   assert(result.stdout.includes('+const next = 2;'), 'diff page should render changed line');
 }
 
+function smokeAiToolEntryPointsPath() {
+  if (!gitAvailable()) {
+    console.log('smoke AI tool entry points skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-ai-entry-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'staged.js'), 'export const staged = 1;\n');
+  fs.writeFileSync(path.join(repoPath, 'unstaged.js'), 'export const unstaged = 1;\n');
+  commitAll(repoPath, 'seed AI entry points');
+  fs.writeFileSync(path.join(repoPath, 'staged.js'), 'export const staged = 2;\n');
+  runGit(['add', 'staged.js'], repoPath);
+  fs.writeFileSync(path.join(repoPath, 'unstaged.js'), 'export const unstaged = 2;\n');
+  fs.writeFileSync(path.join(repoPath, 'untracked.txt'), 'new untracked text\n');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'AI Entry Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const before = readGitState(repoPath);
+  const aiGateway = new AiGateway({
+    aiPromptManager: new AiPromptManager(new PromptsStore(storageDir)),
+    aiDiffBuilder: new AiDiffBuilder(new Git()),
+    clipboard: { copy() { return { ok: true, warning: null }; } },
+    browserOpener: { open() { return { ok: true, warning: null }; } },
+    localAiClient: { async sendChatCompletion() { return { ok: true, content: 'ok' }; } }
+  });
+  const payload = aiGateway.buildRepoPayload({
+    repoPath,
+    settings: { ai: { globalMaxPromptCharacters: 15000 } }
+  });
+  const result = runApp([
+    '1',
+    '1',
+    'a',
+    'b',
+    'e',
+    'b',
+    'v',
+    's',
+    'b',
+    'e',
+    'b',
+    'b',
+    'b',
+    'b',
+    'q'
+  ].join('\n') + '\n', home);
+  const after = readGitState(repoPath);
+
+  assert(result.status === 0, result.stderr || 'AI tool entry points path failed');
+  assert(result.stdout.includes('A. Commit review'), 'repo page should render commit review AI action');
+  assert(result.stdout.includes('E. Security review'), 'repo or diff page should render security review AI action');
+  assert(result.stdout.includes('S. Generate summary'), 'diff page should render diff summary AI action');
+  assert(result.stdout.includes('AI: Commit review'), 'commit review action should open AI provider selection');
+  assert(result.stdout.includes('AI: Diff summary'), 'diff summary action should open AI provider selection');
+  assert(result.stdout.includes('AI: Security review'), 'security review action should open AI provider selection');
+  assert(payload.payload.includes('[staged diff: staged.js]'), 'AI payload should include staged changes');
+  assert(payload.payload.includes('[unstaged diff: unstaged.js]'), 'AI payload should include unstaged tracked changes');
+  assert(payload.payload.includes('[untracked diff: untracked.txt]'), 'AI payload should include untracked text changes');
+  assert(after.head === before.head, 'AI entry paths must not create commits');
+  assert(after.status === before.status, 'AI entry paths must not change git status');
+  assert(after.stagedDiff === before.stagedDiff, 'AI entry paths must not change staged diff');
+  assert(after.unstagedDiff === before.unstagedDiff, 'AI entry paths must not change unstaged diff');
+  assert(fs.readFileSync(path.join(repoPath, 'untracked.txt'), 'utf8') === 'new untracked text\n', 'AI entry paths must not modify untracked files');
+}
+
 function smokeRepoFilePagePath() {
   if (!gitAvailable()) {
     console.log('smoke repo file page skipped: git unavailable');
@@ -1494,6 +1582,7 @@ smokeDuplicateValidation();
 smokeTableFormatting();
 smokeBranchFormatting();
 smokeRepoPageOpenAndDiffPath();
+smokeAiToolEntryPointsPath();
 smokeRepoFilePagePath();
 smokeRepoHotfixConfirmPath();
 smokeBranchScannerPath();

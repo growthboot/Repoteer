@@ -1,13 +1,95 @@
+import { DEFAULT_AI_GLOBAL_MAX_PROMPT_CHARACTERS } from '../data/defaultSettings.js';
+
 export class AiGateway {
-  constructor({ aiPromptManager, clipboard, browserOpener, localAiClient }) {
+  constructor({ aiPromptManager, aiDiffBuilder = null, clipboard, browserOpener, localAiClient }) {
     this.aiPromptManager = aiPromptManager;
+    this.aiDiffBuilder = aiDiffBuilder;
     this.clipboard = clipboard;
     this.browserOpener = browserOpener;
     this.localAiClient = localAiClient;
   }
 
+  async openRepoTool(router, params) {
+    const payload = this.buildRepoPayload({
+      repoPath: params.repoPath ?? params.repo?.path,
+      settings: params.settings,
+      maxPromptCharacters: params.maxPromptCharacters
+    });
+
+    await this.openProviderSelection(router, {
+      ...params,
+      repoName: params.repoName ?? params.repo?.name,
+      repoPath: params.repoPath ?? params.repo?.path,
+      projectName: params.projectName ?? params.project?.name,
+      payload
+    });
+  }
+
   async openProviderSelection(router, params) {
     await router.open('aiProviderSelect', this.normalizeSelectionParams(params));
+  }
+
+  buildRepoPayload({ repoPath, settings, maxPromptCharacters }) {
+    const normalizedMaxPromptCharacters = this.getMaxPromptCharacters(maxPromptCharacters, settings);
+
+    if (!repoPath) {
+      return {
+        ok: false,
+        status: 'warning',
+        payload: '',
+        size: 0,
+        maxPromptCharacters: normalizedMaxPromptCharacters,
+        inputSummary: 'staged, unstaged tracked, and untracked text changes',
+        warnings: ['Repo path was not available for AI diff payload building.']
+      };
+    }
+
+    if (!this.aiDiffBuilder) {
+      return {
+        ok: false,
+        status: 'warning',
+        payload: '',
+        size: 0,
+        maxPromptCharacters: normalizedMaxPromptCharacters,
+        inputSummary: 'staged, unstaged tracked, and untracked text changes',
+        warnings: ['AI diff payload builder is not available.']
+      };
+    }
+
+    return this.aiDiffBuilder.build(repoPath, {
+      maxPromptCharacters: normalizedMaxPromptCharacters
+    });
+  }
+
+  getProviderPayload(selectionParams, provider, settings) {
+    const maxPromptCharacters = this.getMaxPromptCharacters(provider?.maxPromptCharacters, settings);
+
+    if (!selectionParams?.repoPath || !this.aiDiffBuilder) {
+      return {
+        ...selectionParams,
+        maxPromptCharacters
+      };
+    }
+
+    if (Number(selectionParams.maxPromptCharacters) === maxPromptCharacters) {
+      return selectionParams;
+    }
+
+    const payload = this.buildRepoPayload({
+      repoPath: selectionParams.repoPath,
+      settings,
+      maxPromptCharacters
+    });
+
+    return this.normalizeSelectionParams({
+      ...selectionParams,
+      payload,
+      userPayload: payload.payload,
+      payloadSize: payload.size,
+      maxPromptCharacters: payload.maxPromptCharacters,
+      inputSummary: payload.inputSummary,
+      payloadWarnings: payload.warnings
+    });
   }
 
   listRunnableProviders(settings) {
@@ -111,6 +193,22 @@ export class AiGateway {
         String(userPayload ?? '')
       ].join('\n\n')
     };
+  }
+
+  getMaxPromptCharacters(value, settings) {
+    const parsed = Number.parseInt(String(value ?? ''), 10);
+
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+
+    const global = Number.parseInt(String(settings?.ai?.globalMaxPromptCharacters ?? ''), 10);
+
+    if (Number.isFinite(global) && global > 0) {
+      return global;
+    }
+
+    return DEFAULT_AI_GLOBAL_MAX_PROMPT_CHARACTERS;
   }
 
   normalizeSelectionParams(params) {

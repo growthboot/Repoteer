@@ -96,20 +96,26 @@ export class AiProviderSelectPage {
   }
 
   async runProvider(provider) {
+    const params = this.runtime.aiGateway.getProviderPayload(
+      this.params,
+      provider,
+      this.runtime.settings
+    );
+
     if (provider.type === 'local') {
-      await this.runLocalProvider(provider);
+      await this.runLocalProvider(provider, params);
       return;
     }
 
-    await this.runBrowserProvider(provider);
+    await this.runBrowserProvider(provider, params);
   }
 
-  async runBrowserProvider(provider) {
+  async runBrowserProvider(provider, params) {
     const color = this.runtime.color;
     const result = this.runtime.aiGateway.runBrowserProvider(
       provider,
-      this.params.toolId,
-      this.params.userPayload
+      params.toolId,
+      params.userPayload
     );
 
     console.log('');
@@ -133,10 +139,10 @@ export class AiProviderSelectPage {
     result.warnings.forEach((warning) => console.log(color.yellow(warning)));
 
     await promptLine('Press Enter to continue.');
-    await this.router.replace('aiProviderSelect', this.params);
+    await this.router.replace('aiProviderSelect', params);
   }
 
-  async runLocalProvider(provider) {
+  async runLocalProvider(provider, params) {
     const color = this.runtime.color;
 
     console.clear();
@@ -153,32 +159,32 @@ export class AiProviderSelectPage {
       console.log('');
       console.log(color.yellow('Local request canceled.'));
       await promptLine('Press Enter to continue.');
-      await this.router.replace('aiProviderSelect', this.params);
+      await this.router.replace('aiProviderSelect', params);
       return;
     }
 
     const result = await this.runtime.aiGateway.runLocalProvider(
       provider,
-      this.params.toolId,
-      this.params.userPayload
+      params.toolId,
+      params.userPayload
     );
 
     if (!result.ok) {
       console.log('');
       console.log(color.yellow(result.warning || 'Local provider request failed.'));
       await promptLine('Press Enter to continue.');
-      await this.router.replace('aiProviderSelect', this.params);
+      await this.router.replace('aiProviderSelect', params);
       return;
     }
 
     await this.router.open('aiResult', {
       toolId: this.params.toolId,
       providerTitle: provider.title,
-      projectName: this.params.projectName,
-      repoName: this.params.repoName,
-      repoPath: this.params.repoPath,
+      projectName: params.projectName,
+      repoName: params.repoName,
+      repoPath: params.repoPath,
       result: result.content,
-      selectionParams: this.params
+      selectionParams: params
     });
   }
 
