@@ -116,20 +116,18 @@ Actions:
 ## Repo Screen
 
 ```text
-Repo: frontend
+Repo: AppVideoStudio / frontend
 
-+120 / -10   net +110
+   File                + / -        net        modfied     last commit
+
+1. test.js             +120 / -10   net +110   10m ago.    20d ago
 
 Actions:
 
-V. View diff
-C. Copy diff
-S. Generate summary
-M. Generate commit message prompt
-MC. Save commit message prompt to clipboard and auto open your default chat client
-H. Hotfix commit
-P. Write a commit & push
-B or [Esc]. Go back one menu
+V. View full diff               C. Copy full diff
+M. Generate commit              H. Hotfix commit
+P. Write a commit & push        B. Back
+R. Refresh
 ```
 
 Rules:
