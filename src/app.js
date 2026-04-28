@@ -7,6 +7,8 @@ import { DiffPage } from './pages/DiffPage.js';
 import { FilePage } from './pages/FilePage.js';
 import { CommitConfirmPage } from './pages/CommitConfirmPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
+import { AiSettingsPage } from './pages/AiSettingsPage.js';
+import { AiProviderEditPage } from './pages/AiProviderEditPage.js';
 import { BranchPage } from './pages/BranchPage.js';
 import { ProjectsStore } from './storage/ProjectsStore.js';
 import { SettingsStore } from './storage/SettingsStore.js';
@@ -81,7 +83,9 @@ export async function main(argv = process.argv.slice(2)) {
     file: FilePage,
     commitConfirm: CommitConfirmPage,
     branch: BranchPage,
-    settings: SettingsPage
+    settings: SettingsPage,
+    aiSettings: AiSettingsPage,
+    aiProviderEdit: AiProviderEditPage
   });
 
   await router.open('projects');

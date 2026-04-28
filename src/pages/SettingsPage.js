@@ -1,4 +1,5 @@
 import { promptAction, promptLine } from '../utils/input.js';
+import { formatActionColumns } from '../utils/menu.js';
 
 export class SettingsPage {
   constructor({ runtime, router }) {
@@ -9,14 +10,25 @@ export class SettingsPage {
   async show() {
     const color = this.runtime.color;
     const colorEnabled = this.runtime.settings.color !== false;
+    const ai = this.runtime.settings.ai;
+    const enabledProviders = ai.providers.filter((provider) => provider.enabled).length;
+    const disabledProviders = ai.providers.length - enabledProviders;
 
     console.clear();
     console.log(color.bold('Settings'));
     console.log('');
-    console.log('Color: ' + this.formatEnabled(colorEnabled));
+    console.log(color.bold('General'));
+    console.log('Color                         ' + this.formatEnabled(colorEnabled));
     console.log('');
-    console.log(color.bold('T.') + ' Toggle color');
-    console.log(color.bold('B.') + ' Back');
+    console.log(color.bold('AI'));
+    console.log('Configured providers          ' + String(enabledProviders) + ' on, ' + String(disabledProviders) + ' off');
+    console.log('Global max prompt size        ' + String(ai.globalMaxPromptCharacters) + ' characters');
+    console.log('');
+    formatActionColumns([
+      color.bold('T.') + ' Toggle color',
+      color.bold('A.') + ' AI settings',
+      color.bold('B.') + ' Back'
+    ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -24,6 +36,11 @@ export class SettingsPage {
 
     if (key === 't') {
       await this.toggleColor(colorEnabled);
+      return;
+    }
+
+    if (key === 'a') {
+      await this.router.open('aiSettings');
       return;
     }
 

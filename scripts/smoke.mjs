@@ -115,6 +115,8 @@ function smokeQuitPath() {
   assert(Array.isArray(readProjects(home)), 'quit path did not create projects array');
   assert(readProjects(home).length === 0, 'quit path should not add projects');
   assert(readSettings(home).color === true, 'quit path did not create default color setting');
+  assert(readSettings(home).ai.globalMaxPromptCharacters === 15000, 'quit path did not create default AI prompt size');
+  assert(readSettings(home).ai.providers.length === 4, 'quit path did not create default AI providers');
 }
 
 function smokePipedMultiCharacterActionPath() {
@@ -151,10 +153,110 @@ function smokeSettingsToggleColorPath() {
   assert(result.status === 0, result.stderr || 'settings toggle color path failed');
   assert(result.stdout.includes('S. Settings'), 'projects page did not render settings action');
   assert(result.stdout.includes('Settings'), 'settings page did not render title');
-  assert(result.stdout.includes('Color: On'), 'settings page did not render color on state');
+  assert(result.stdout.includes('Color                         On'), 'settings page did not render color on state');
+  assert(result.stdout.includes('A. AI settings'), 'settings page did not render AI settings action');
   assert(result.stdout.includes('Color disabled.'), 'settings page did not confirm disabled color');
-  assert(result.stdout.includes('Color: Off'), 'settings page did not render color off state');
+  assert(result.stdout.includes('Color                         Off'), 'settings page did not render color off state');
   assert(readSettings(home).color === false, 'settings toggle did not persist color=false');
+}
+
+function smokeAiSettingsPersistencePath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const input = [
+    's',
+    'a',
+    'g',
+    '18000',
+    '',
+    'a',
+    'Custom web chat',
+    'https://example.com/chat',
+    '60',
+    '8000',
+    '',
+    'l',
+    'Custom local',
+    'http://127.0.0.1:9000/v1/chat/completions',
+    'custom-local-model',
+    '70',
+    '9000',
+    '',
+    'e',
+    '1',
+    't',
+    '',
+    'u',
+    'http://localhost:8080/v1/chat/completions',
+    '',
+    'o',
+    'demo-local-model',
+    '',
+    'p',
+    '30',
+    '',
+    'm',
+    '11000',
+    '',
+    'b',
+    'e',
+    '3',
+    't',
+    '',
+    'u',
+    'https://chatgpt.com/?temporary-chat=false',
+    '',
+    'p',
+    '25',
+    '',
+    'm',
+    '12000',
+    '',
+    'b',
+    'b',
+    'b',
+    'q'
+  ].join('\n') + '\n';
+  const result = runApp(input, home);
+  const settings = readSettings(home);
+  const lmStudio = settings.ai.providers.find((provider) => provider.id === 'lm-studio-local');
+  const ollama = settings.ai.providers.find((provider) => provider.id === 'ollama-openai-compatible');
+  const chatgpt = settings.ai.providers.find((provider) => provider.id === 'chatgpt-temp');
+  const custom = settings.ai.providers.find((provider) => provider.title === 'Custom web chat');
+  const customLocal = settings.ai.providers.find((provider) => provider.title === 'Custom local');
+
+  assert(result.status === 0, result.stderr || 'AI settings persistence path failed');
+  assert(result.stdout.includes('AI Settings'), 'AI settings path did not render AI settings title');
+  assert(result.stdout.includes('Global max prompt size: 15000 characters'), 'AI settings path did not render default global max prompt size');
+  assert(result.stdout.includes('LM Studio local'), 'AI settings path did not render local provider');
+  assert(result.stdout.includes('ChatGPT temporary chat'), 'AI settings path did not render browser provider');
+  assert(result.stdout.includes('Browser provider saved.'), 'AI settings path did not add browser provider');
+  assert(result.stdout.includes('Local provider saved.'), 'AI settings path did not add local provider');
+  assert(result.stdout.includes('Provider updated.'), 'AI settings path did not update providers');
+
+  assert(settings.ai.globalMaxPromptCharacters === 18000, 'AI settings did not persist global max prompt size');
+  assert(settings.ai.providers.length === 6, 'AI settings did not persist added AI providers');
+  assert(lmStudio.enabled === true, 'AI settings did not persist local enabled state');
+  assert(lmStudio.endpointUrl === 'http://localhost:8080/v1/chat/completions', 'AI settings did not persist local endpoint URL');
+  assert(lmStudio.model === 'demo-local-model', 'AI settings did not persist local model');
+  assert(lmStudio.priority === 30, 'AI settings did not persist local priority');
+  assert(lmStudio.maxPromptCharacters === 11000, 'AI settings did not persist local max prompt size');
+  assert(ollama.enabled === false, 'AI settings should keep no-secret local defaults disabled');
+  assert(ollama.endpointUrl === 'http://127.0.0.1:11434/v1/chat/completions', 'AI settings did not persist Ollama default endpoint');
+  assert(chatgpt.enabled === false, 'AI settings did not persist browser enabled state');
+  assert(chatgpt.url === 'https://chatgpt.com/?temporary-chat=false', 'AI settings did not persist browser URL');
+  assert(chatgpt.priority === 25, 'AI settings did not persist browser priority');
+  assert(chatgpt.maxPromptCharacters === 12000, 'AI settings did not persist browser max prompt size');
+  assert(custom.type === 'browser', 'AI settings did not persist custom browser type');
+  assert(custom.enabled === true, 'AI settings did not persist custom browser enabled state');
+  assert(custom.url === 'https://example.com/chat', 'AI settings did not persist custom browser URL');
+  assert(custom.priority === 60, 'AI settings did not persist custom browser priority');
+  assert(custom.maxPromptCharacters === 8000, 'AI settings did not persist custom browser max prompt size');
+  assert(customLocal.type === 'local', 'AI settings did not persist custom local type');
+  assert(customLocal.enabled === false, 'AI settings should default custom local provider to disabled');
+  assert(customLocal.endpointUrl === 'http://127.0.0.1:9000/v1/chat/completions', 'AI settings did not persist custom local endpoint');
+  assert(customLocal.model === 'custom-local-model', 'AI settings did not persist custom local model');
+  assert(customLocal.priority === 70, 'AI settings did not persist custom local priority');
+  assert(customLocal.maxPromptCharacters === 9000, 'AI settings did not persist custom local max prompt size');
 }
 
 function smokeAddProjectPath() {
@@ -698,6 +800,7 @@ function smokeRepoHotfixConfirmPath() {
   initGitRepo(repoPath);
   fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
   commitAll(repoPath, 'seed hotfix');
+  runGit(['checkout', '-b', 'feature'], repoPath);
   fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\nconst next = 2;\n');
   fs.writeFileSync(path.join(repoPath, 'new.js'), 'export const created = true;\n');
 
@@ -718,10 +821,10 @@ function smokeRepoHotfixConfirmPath() {
 
   assert(result.status === 0, result.stderr || 'repo hotfix confirm path failed');
   assert(result.stdout.includes('Confirm Commit'), 'hotfix path should render confirmation page');
-  assert(result.stdout.includes('Title: hotfix(main): 2 file(s)'), 'hotfix path should render generated title');
+  assert(result.stdout.includes('Title: hotfix(feature): 2 file(s)'), 'hotfix path should render generated title with current branch');
   assert(result.stdout.includes('Body: Auto hotfix commit'), 'hotfix path should render default body');
   assert(result.stdout.includes('Commit created.'), 'hotfix path should create commit after confirmation');
-  assert(log.stdout.includes('hotfix(main): 2 file(s)'), 'hotfix commit subject mismatch');
+  assert(log.stdout.includes('hotfix(feature): 2 file(s)'), 'hotfix commit subject mismatch');
   assert(log.stdout.includes('Auto hotfix commit'), 'hotfix commit body mismatch');
   assert(status.stdout.trim() === '', 'hotfix commit should include all tracked and untracked changes');
 }
@@ -892,6 +995,7 @@ checkSyntax();
 smokeQuitPath();
 smokeNoColorBootFlagPath();
 smokeSettingsToggleColorPath();
+smokeAiSettingsPersistencePath();
 smokePipedMultiCharacterActionPath();
 smokeProjectsPageRefreshPath();
 smokeAddProjectPath();

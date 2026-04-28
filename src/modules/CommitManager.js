@@ -1,7 +1,9 @@
 export class CommitManager {
   createHotfixPayload(repo) {
+    const branchName = repo.branch ?? 'detached';
+
     return {
-      title: 'hotfix(main): ' + String(repo.modifiedFiles) + ' file(s)',
+      title: 'hotfix(' + branchName + '): ' + String(repo.modifiedFiles) + ' file(s)',
       body: 'Auto hotfix commit'
     };
   }
