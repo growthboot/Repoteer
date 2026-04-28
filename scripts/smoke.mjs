@@ -630,6 +630,44 @@ function smokeRepoPageOpenAndDiffPath() {
   assert(result.stdout.includes('+const next = 2;'), 'diff page should render changed line');
 }
 
+function smokeRepoFilePagePath() {
+  if (!gitAvailable()) {
+    console.log('smoke repo file page skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-file-page-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
+  commitAll(repoPath, 'seed file page');
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\nconst next = 2;\n');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'File Page Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp(['1', '1', '1', 'd', 'yes', '', 'b', 'b', 'b', 'q'].join('\n') + '\n', home);
+  const status = spawnSync('git', ['status', '--porcelain'], {
+    cwd: repoPath,
+    encoding: 'utf8'
+  });
+
+  assert(result.status === 0, result.stderr || 'repo file page path failed');
+  assert(result.stdout.includes('File: test.js'), 'file page should render selected file title');
+  assert(result.stdout.includes('Created:'), 'file page should render created metadata');
+  assert(result.stdout.includes('Modified:'), 'file page should render modified metadata');
+  assert(result.stdout.includes('+ / -:'), 'file page should render file line stats');
+  assert(result.stdout.includes('+const next = 2;'), 'file page should render selected file diff');
+  assert(result.stdout.includes('D. Discard file changes'), 'file page should render discard action');
+  assert(result.stdout.includes('File changes discarded.'), 'file page should confirm discard');
+  assert(status.stdout.trim() === '', 'discard file changes should clean selected file');
+}
+
 function smokeRepoHotfixConfirmPath() {
   if (!gitAvailable()) {
     console.log('smoke repo hotfix skipped: git unavailable');
@@ -696,6 +734,7 @@ smokeScannerMissingProjectPath();
 smokeDuplicateValidation();
 smokeTableFormatting();
 smokeRepoPageOpenAndDiffPath();
+smokeRepoFilePagePath();
 smokeRepoHotfixConfirmPath();
 
 console.log('smoke ok');

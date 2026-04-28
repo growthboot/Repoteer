@@ -69,6 +69,19 @@ export class RepoPage {
       return;
     }
 
+    if (/^\d+$/.test(key) && fileStats.ok) {
+      const selectedFile = fileStats.files[Number(key) - 1] ?? null;
+
+      if (selectedFile) {
+        await this.router.open('file', {
+          projectName: project.name,
+          repoPath: repo.path,
+          file: selectedFile.file
+        });
+        return;
+      }
+    }
+
     if (key === 'v') {
       await this.router.open('diff', {
         projectName: project.name,

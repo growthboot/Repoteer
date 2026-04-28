@@ -4,6 +4,7 @@ import { AddProjectPage } from './pages/AddProjectPage.js';
 import { ProjectPage } from './pages/ProjectPage.js';
 import { RepoPage } from './pages/RepoPage.js';
 import { DiffPage } from './pages/DiffPage.js';
+import { FilePage } from './pages/FilePage.js';
 import { CommitConfirmPage } from './pages/CommitConfirmPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { ProjectsStore } from './storage/ProjectsStore.js';
@@ -73,6 +74,7 @@ export async function main(argv = process.argv.slice(2)) {
     project: ProjectPage,
     repo: RepoPage,
     diff: DiffPage,
+    file: FilePage,
     commitConfirm: CommitConfirmPage,
     settings: SettingsPage
   });
