@@ -27,6 +27,11 @@ export class AiSettingsPage {
     }
 
     console.log('');
+    console.log(color.bold('Prompts'));
+    this.runtime.aiPromptManager.listTools().forEach((tool) => {
+      console.log(color.bold(this.promptActionForTool(tool.id).toUpperCase() + '.') + ' ' + tool.title + ' prompt');
+    });
+    console.log('');
     formatActionColumns([
       color.bold('G.') + ' Set global max prompt size',
       color.bold('A.') + ' Add browser URL',
@@ -56,6 +61,15 @@ export class AiSettingsPage {
 
     if (key === 'e') {
       await this.openProviderEdit(providers);
+      return;
+    }
+
+    const selectedTool = this.runtime.aiPromptManager.listTools().find((tool) => {
+      return this.promptActionForTool(tool.id) === key;
+    }) ?? null;
+
+    if (selectedTool) {
+      await this.router.open('aiPromptEdit', { toolId: selectedTool.id });
       return;
     }
 
@@ -277,6 +291,22 @@ export class AiSettingsPage {
 
   isPositiveInteger(value) {
     return /^\d+$/.test(value.trim()) && Number(value.trim()) > 0;
+  }
+
+  promptActionForTool(toolId) {
+    if (toolId === 'diff_summary') {
+      return 'd';
+    }
+
+    if (toolId === 'commit_review') {
+      return 'c';
+    }
+
+    if (toolId === 'security_review') {
+      return 's';
+    }
+
+    return '';
   }
 
   async showWarning(message) {

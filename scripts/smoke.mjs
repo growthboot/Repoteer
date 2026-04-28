@@ -4,6 +4,9 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { Git } from '../src/modules/Git.js';
 import { Scanner } from '../src/modules/Scanner.js';
+import { AiPromptManager } from '../src/modules/AiPromptManager.js';
+import { PromptsStore } from '../src/storage/PromptsStore.js';
+import { DEFAULT_PROMPTS } from '../src/data/defaultPrompts.js';
 import { formatTable } from '../src/utils/table.js';
 import { formatActionColumns } from '../src/utils/menu.js';
 import { stripAnsi } from '../src/utils/color.js';
@@ -94,6 +97,11 @@ function readSettings(home) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+function readPrompts(home) {
+  const file = path.join(home, '.repoteer', 'storage', 'prompts.json');
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
 function readBookmarks(home) {
   const file = path.join(home, '.repoteer', 'storage', 'bookmarks.json');
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -117,6 +125,8 @@ function smokeQuitPath() {
   assert(readSettings(home).color === true, 'quit path did not create default color setting');
   assert(readSettings(home).ai.globalMaxPromptCharacters === 15000, 'quit path did not create default AI prompt size');
   assert(readSettings(home).ai.providers.length === 4, 'quit path did not create default AI providers');
+  assert(readPrompts(home)['commit_review.system'] === DEFAULT_PROMPTS['commit_review.system'], 'quit path did not create default commit review system prompt');
+  assert(readPrompts(home)['diff_summary.pre'] === DEFAULT_PROMPTS['diff_summary.pre'], 'quit path did not create default diff summary pre-prompt');
 }
 
 function smokePipedMultiCharacterActionPath() {
@@ -257,6 +267,62 @@ function smokeAiSettingsPersistencePath() {
   assert(customLocal.model === 'custom-local-model', 'AI settings did not persist custom local model');
   assert(customLocal.priority === 70, 'AI settings did not persist custom local priority');
   assert(customLocal.maxPromptCharacters === 9000, 'AI settings did not persist custom local max prompt size');
+}
+
+function smokeAiPromptEditingPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const editInput = [
+    's',
+    'a',
+    'c',
+    'y',
+    'Custom commit review system prompt',
+    '',
+    'p',
+    'Custom commit review pre-prompt',
+    '',
+    'b',
+    'b',
+    'b',
+    'q'
+  ].join('\n') + '\n';
+  const editResult = runApp(editInput, home);
+  const editedPrompts = readPrompts(home);
+  const promptManager = new AiPromptManager(new PromptsStore(path.join(home, '.repoteer', 'storage')));
+  const composedPrompt = promptManager.composeBrowserPrompt('commit_review', 'USER PAYLOAD');
+
+  assert(editResult.status === 0, editResult.stderr || 'AI prompt editing path failed');
+  assert(editResult.stdout.includes('Prompts'), 'AI prompt editing path did not render prompt section');
+  assert(editResult.stdout.includes('C. Commit review prompt'), 'AI prompt editing path did not render commit review prompt action');
+  assert(editResult.stdout.includes('AI Prompt: Commit review'), 'AI prompt editing path did not open prompt editor');
+  assert(editResult.stdout.includes('Prompt updated.'), 'AI prompt editing path did not update prompts');
+  assert(editedPrompts['commit_review.system'] === 'Custom commit review system prompt', 'AI prompt editing did not persist system prompt');
+  assert(editedPrompts['commit_review.pre'] === 'Custom commit review pre-prompt', 'AI prompt editing did not persist pre-prompt');
+  assert(!Object.prototype.hasOwnProperty.call(readSettings(home), 'prompts'), 'AI prompt editing should not store prompt text in settings.json');
+  assert(
+    composedPrompt === 'Custom commit review system prompt\n\nCustom commit review pre-prompt\n\nUSER PAYLOAD',
+    'browser prompt composition should use system prompt, blank line, pre-prompt, blank line, user payload'
+  );
+
+  const resetInput = [
+    's',
+    'a',
+    'c',
+    'r',
+    'yes',
+    '',
+    'b',
+    'b',
+    'b',
+    'q'
+  ].join('\n') + '\n';
+  const resetResult = runApp(resetInput, home);
+  const resetPrompts = readPrompts(home);
+
+  assert(resetResult.status === 0, resetResult.stderr || 'AI prompt reset path failed');
+  assert(resetResult.stdout.includes('Prompt reset.'), 'AI prompt reset path did not confirm reset');
+  assert(resetPrompts['commit_review.system'] === DEFAULT_PROMPTS['commit_review.system'], 'AI prompt reset did not restore system prompt');
+  assert(resetPrompts['commit_review.pre'] === DEFAULT_PROMPTS['commit_review.pre'], 'AI prompt reset did not restore pre-prompt');
 }
 
 function smokeAddProjectPath() {
@@ -996,6 +1062,7 @@ smokeQuitPath();
 smokeNoColorBootFlagPath();
 smokeSettingsToggleColorPath();
 smokeAiSettingsPersistencePath();
+smokeAiPromptEditingPath();
 smokePipedMultiCharacterActionPath();
 smokeProjectsPageRefreshPath();
 smokeAddProjectPath();

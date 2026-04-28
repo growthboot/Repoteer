@@ -9,14 +9,17 @@ import { CommitConfirmPage } from './pages/CommitConfirmPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { AiSettingsPage } from './pages/AiSettingsPage.js';
 import { AiProviderEditPage } from './pages/AiProviderEditPage.js';
+import { AiPromptEditPage } from './pages/AiPromptEditPage.js';
 import { BranchPage } from './pages/BranchPage.js';
 import { ProjectsStore } from './storage/ProjectsStore.js';
 import { SettingsStore } from './storage/SettingsStore.js';
+import { PromptsStore } from './storage/PromptsStore.js';
 import { BookmarksStore } from './storage/BookmarksStore.js';
 import { CommandsStore } from './storage/CommandsStore.js';
 import { ProjectManager } from './modules/ProjectManager.js';
 import { CommitManager } from './modules/CommitManager.js';
 import { BranchManager } from './modules/BranchManager.js';
+import { AiPromptManager } from './modules/AiPromptManager.js';
 import { Clipboard } from './modules/Clipboard.js';
 import { Git } from './modules/Git.js';
 import { Scanner } from './modules/Scanner.js';
@@ -28,6 +31,7 @@ export async function main(argv = process.argv.slice(2)) {
   const paths = resolveRuntimePaths();
   const projectsStore = new ProjectsStore(paths.storageDir);
   const settingsStore = new SettingsStore(paths.storageDir);
+  const promptsStore = new PromptsStore(paths.storageDir);
   const bookmarksStore = new BookmarksStore(paths.storageDir);
   const commandsStore = new CommandsStore(paths.storageDir);
   const settings = settingsStore.get();
@@ -36,6 +40,7 @@ export async function main(argv = process.argv.slice(2)) {
   const scanner = new Scanner(git);
   const commitManager = new CommitManager(git);
   const branchManager = new BranchManager(git);
+  const aiPromptManager = new AiPromptManager(promptsStore);
   const clipboard = new Clipboard();
   const forceColorDisabled = argv.includes('--no-color');
   const color = createColor({
@@ -47,6 +52,7 @@ export async function main(argv = process.argv.slice(2)) {
     paths,
     settings,
     settingsStore,
+    promptsStore,
     projectsStore,
     bookmarksStore,
     commandsStore,
@@ -54,6 +60,7 @@ export async function main(argv = process.argv.slice(2)) {
     git,
     commitManager,
     branchManager,
+    aiPromptManager,
     clipboard,
     scanner,
     color,
@@ -85,7 +92,8 @@ export async function main(argv = process.argv.slice(2)) {
     branch: BranchPage,
     settings: SettingsPage,
     aiSettings: AiSettingsPage,
-    aiProviderEdit: AiProviderEditPage
+    aiProviderEdit: AiProviderEditPage,
+    aiPromptEdit: AiPromptEditPage
   });
 
   await router.open('projects');
