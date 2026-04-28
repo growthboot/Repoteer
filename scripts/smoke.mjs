@@ -5,6 +5,7 @@ import { spawnSync } from 'child_process';
 import { Git } from '../src/modules/Git.js';
 import { Scanner } from '../src/modules/Scanner.js';
 import { AiPromptManager } from '../src/modules/AiPromptManager.js';
+import { AiDiffBuilder } from '../src/modules/AiDiffBuilder.js';
 import { PromptsStore } from '../src/storage/PromptsStore.js';
 import { DEFAULT_PROMPTS } from '../src/data/defaultPrompts.js';
 import { formatTable } from '../src/utils/table.js';
@@ -323,6 +324,410 @@ function smokeAiPromptEditingPath() {
   assert(resetResult.stdout.includes('Prompt reset.'), 'AI prompt reset path did not confirm reset');
   assert(resetPrompts['commit_review.system'] === DEFAULT_PROMPTS['commit_review.system'], 'AI prompt reset did not restore system prompt');
   assert(resetPrompts['commit_review.pre'] === DEFAULT_PROMPTS['commit_review.pre'], 'AI prompt reset did not restore pre-prompt');
+}
+
+function smokeAiDiffBuilderPayloadPath() {
+  if (!gitAvailable()) {
+    console.log('smoke AI diff builder skipped: git unavailable');
+    return;
+  }
+
+  const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-ai-diff-repo-'));
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'staged.js'), 'export const staged = 1;\n');
+  fs.writeFileSync(path.join(repoPath, 'unstaged.js'), 'export const unstaged = 1;\n');
+  commitAll(repoPath, 'seed AI diff builder');
+
+  fs.writeFileSync(path.join(repoPath, 'staged.js'), 'export const staged = 2;\n');
+  runGit(['add', 'staged.js'], repoPath);
+  fs.writeFileSync(path.join(repoPath, 'unstaged.js'), 'export const unstaged = 2;\n');
+  fs.writeFileSync(path.join(repoPath, 'notes.txt'), 'untracked note\nsecond line\n');
+  fs.writeFileSync(path.join(repoPath, 'binary.dat'), Buffer.from([0, 1, 2, 3, 4, 5]));
+  fs.writeFileSync(path.join(repoPath, 'base64.txt'), 'A'.repeat(300) + '\n');
+  fs.writeFileSync(path.join(repoPath, 'large.js'), Array.from({ length: 120 }, (_, index) => {
+    return 'export const value' + String(index) + ' = ' + String(index) + ';';
+  }).join('\n') + '\n');
+
+  const builder = new AiDiffBuilder(new Git());
+  const full = builder.build(repoPath, { maxPromptCharacters: 20000 });
+  const truncated = builder.build(repoPath, { maxPromptCharacters: 900 });
+
+  assert(full.ok, full.warnings.join('\n') || 'AI diff builder should succeed');
+  assert(full.status === 'warning', 'AI diff builder should warn when files are omitted');
+  assert(full.payload.includes('[staged diff: staged.js]'), 'AI diff payload should include staged changes');
+  assert(full.payload.includes('+export const staged = 2;'), 'AI diff payload should include staged diff content');
+  assert(full.payload.includes('[unstaged diff: unstaged.js]'), 'AI diff payload should include unstaged tracked changes');
+  assert(full.payload.includes('+export const unstaged = 2;'), 'AI diff payload should include unstaged diff content');
+  assert(full.payload.includes('[untracked diff: notes.txt]'), 'AI diff payload should include untracked text-like files');
+  assert(full.payload.includes('+untracked note'), 'AI diff payload should include untracked text content');
+  assert(full.payload.includes('[Omitted non-text diff: binary.dat]'), 'AI diff payload should mark binary omissions');
+  assert(full.payload.includes('[Omitted likely base64 data: base64.txt]'), 'AI diff payload should mark base64-like omissions');
+  assert(!full.payload.includes('A'.repeat(160)), 'AI diff payload should not include base64-like content');
+  assert(!full.truncated, 'large max AI diff payload should not be truncated');
+
+  assert(truncated.ok, truncated.warnings.join('\n') || 'truncated AI diff builder should succeed');
+  assert(truncated.truncated, 'AI diff payload should report truncation');
+  assert(truncated.payload.length <= 900, 'AI diff payload should enforce max prompt size on user payload');
+  assert(truncated.payload.includes('...TRUNCATED_DIFF_DATA...'), 'AI diff payload should include truncation marker');
+  assert(truncated.payload.includes('diff --git'), 'truncated AI diff payload should preserve diff context');
+  assert(truncated.payload.includes('@@'), 'truncated AI diff payload should preserve hunk context');
+
+  const promptStorageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-ai-prompts-'));
+  const promptManager = new AiPromptManager(new PromptsStore(promptStorageDir));
+  const composedPrompt = promptManager.composeBrowserPrompt('diff_summary', truncated.payload);
+
+  assert(composedPrompt.length > truncated.maxPromptCharacters, 'AI prompt size limit should apply to user payload only');
+  assert(composedPrompt.endsWith(truncated.payload), 'browser prompt should preserve the prepared user payload');
+}
+
+function smokeAiProviderSelectBrowserPath() {
+  const result = runAiProviderSelectScenario('success', ['3', '', 'b'].join('\n') + '\n');
+
+  assert(result.status === 0, result.stderr || 'AI provider select browser path failed');
+  assert(result.stdout.includes('AI: Diff summary'), 'AI provider select should render tool title');
+  assert(result.stdout.includes('Repo: Demo Project / demo-repo'), 'AI provider select should render repo context');
+  assert(result.stdout.includes('Payload size: 12 / 100 characters'), 'AI provider select should render payload size');
+  assert(result.stdout.includes('Diff input: staged, unstaged, untracked'), 'AI provider select should render diff input summary');
+  assert(result.stdout.includes('Enabled Local'), 'AI provider select should show enabled local provider after local execution exists');
+  assert(result.stdout.includes('Ready'), 'AI provider select should mark local providers ready');
+  assert(result.stdout.includes('First Browser'), 'AI provider select should show enabled browser provider');
+  assert(result.stdout.includes('Alpha Browser'), 'AI provider select should show same-priority provider by title');
+  assert(result.stdout.includes('Beta Browser'), 'AI provider select should show later same-priority provider');
+  assert(result.stdout.indexOf('Enabled Local') < result.stdout.indexOf('First Browser'), 'AI provider select should order local and browser providers by priority');
+  assert(result.stdout.indexOf('First Browser') < result.stdout.indexOf('Alpha Browser'), 'AI provider select should order providers by priority');
+  assert(result.stdout.indexOf('Alpha Browser') < result.stdout.indexOf('Beta Browser'), 'AI provider select should order equal priorities by title');
+  assert(!result.stdout.includes('Disabled Browser'), 'AI provider select should hide disabled browser providers');
+  assert(!result.stdout.includes('Invalid Local'), 'AI provider select should hide unavailable local providers');
+  assert(result.stdout.includes('Prompt copied.'), 'AI provider select should confirm browser prompt copy');
+  assert(result.stdout.includes('Opened URL: https://alpha.example/chat'), 'AI provider select should confirm browser URL open');
+  assert(result.stdout.includes('COPIED_HAS_SYSTEM true'), 'browser prompt should include system prompt');
+  assert(result.stdout.includes('COPIED_HAS_PRE true'), 'browser prompt should include pre-prompt');
+  assert(result.stdout.includes('COPIED_ENDS_WITH_PAYLOAD true'), 'browser prompt should end with user payload');
+  assert(result.stdout.includes('OPENED_URL https://alpha.example/chat'), 'browser provider selection should open selected URL');
+  assert(result.stdout.includes('Return Page'), 'AI provider select back action should return to previous page');
+}
+
+function smokeAiProviderSelectWarningPath() {
+  const result = runAiProviderSelectScenario('failure', ['2', '', 'b'].join('\n') + '\n');
+
+  assert(result.status === 0, result.stderr || 'AI provider select warning path failed');
+  assert(result.stdout.includes('Prompt was not copied automatically.'), 'clipboard failure should show copy warning');
+  assert(result.stdout.includes('Prompt:'), 'clipboard failure should show prompt for manual copy');
+  assert(result.stdout.includes('Browser URL could not be opened automatically.'), 'browser open failure should show warning');
+  assert(result.stdout.includes('URL: https://first.example/chat'), 'browser open failure should show URL');
+  assert(result.stdout.includes('copy failed in smoke'), 'clipboard failure should include underlying warning');
+  assert(result.stdout.includes('open failed in smoke'), 'browser open failure should include underlying warning');
+}
+
+function smokeAiLocalProviderSuccessPath() {
+  const result = runAiLocalProviderScenario('success', ['1', 'yes', 'c', '', 'r', 'b'].join('\n') + '\n');
+
+  assert(result.status === 0, result.stderr || 'AI local provider success path failed');
+  assert(result.stdout.includes('Enabled Local'), 'local provider picker should render enabled local provider');
+  assert(result.stdout.includes('Ready'), 'local provider picker should mark local provider ready');
+  assert(result.stdout.includes('Send to local AI provider'), 'local provider should show confirmation screen');
+  assert(result.stdout.includes('Endpoint: 127.0.0.1:'), 'local provider confirmation should show endpoint host');
+  assert(result.stdout.includes('Model: test-model'), 'local provider confirmation should show model');
+  assert(result.stdout.includes('AI: Diff summary result'), 'local provider success should render result page');
+  assert(result.stdout.includes('Provider: Enabled Local'), 'AI result should render provider title');
+  assert(result.stdout.includes('Local summary result'), 'AI result should render local provider content');
+  assert(result.stdout.includes('AI result copied.'), 'AI result page should support copying result');
+  assert(result.stdout.includes('COPIED_RESULT Local summary result'), 'AI result copy should copy result content');
+  assert(result.stdout.includes('REQUEST_MODEL test-model'), 'local provider request should include configured model');
+  assert(result.stdout.includes('REQUEST_HAS_AUTH false'), 'local provider request should not include auth headers');
+  assert(result.stdout.includes('REQUEST_SYSTEM_HAS_INTERNAL true'), 'local provider request should include internal messages in system content');
+  assert(result.stdout.includes('REQUEST_USER_HAS_PAYLOAD true'), 'local provider request should include user payload');
+  assert(result.stdout.includes('Return Page'), 'AI result run again and picker back should return to previous page');
+}
+
+function smokeAiLocalProviderCancelPath() {
+  const result = runAiLocalProviderScenario('success', ['1', 'no', '', 'b'].join('\n') + '\n');
+
+  assert(result.status === 0, result.stderr || 'AI local provider cancel path failed');
+  assert(result.stdout.includes('Local request canceled.'), 'local provider should allow cancellation before request');
+  assert(result.stdout.includes('SERVER_REQUESTED false'), 'local provider cancellation should not send request');
+}
+
+function smokeAiLocalProviderNon2xxPath() {
+  const result = runAiLocalProviderScenario('non2xx', ['1', 'yes', '', 'b'].join('\n') + '\n');
+
+  assert(result.status === 0, result.stderr || 'AI local provider non-2xx path failed');
+  assert(result.stdout.includes('Local provider returned HTTP 503'), 'local provider should show non-2xx warning');
+  assert(result.stdout.includes('Return Page'), 'local provider non-2xx path should stay navigable');
+}
+
+function smokeAiLocalProviderInvalidShapePath() {
+  const result = runAiLocalProviderScenario('invalid', ['1', 'yes', '', 'b'].join('\n') + '\n');
+
+  assert(result.status === 0, result.stderr || 'AI local provider invalid response path failed');
+  assert(result.stdout.includes('choices[0].message.content'), 'local provider should show invalid response shape warning');
+  assert(result.stdout.includes('Return Page'), 'local provider invalid response path should stay navigable');
+}
+
+function smokeAiLocalProviderConnectionFailurePath() {
+  const result = runAiLocalProviderScenario('connection', ['1', 'yes', '', 'b'].join('\n') + '\n');
+
+  assert(result.status === 0, result.stderr || 'AI local provider connection failure path failed');
+  assert(result.stdout.includes('failed') || result.stdout.includes('ECONNREFUSED') || result.stdout.includes('fetch'), 'local provider should show connection warning');
+  assert(result.stdout.includes('Return Page'), 'local provider connection failure path should stay navigable');
+}
+
+function smokeAiProviderSelectSettingsPath() {
+  const result = runAiProviderSelectScenario('success', ['s', 'b', 'b'].join('\n') + '\n');
+
+  assert(result.status === 0, result.stderr || 'AI provider select settings path failed');
+  assert(result.stdout.includes('AI Settings'), 'AI provider select should open AI settings');
+  assert(result.stdout.includes('Return Page'), 'AI provider select should return after settings and back actions');
+}
+
+function runAiProviderSelectScenario(mode, input) {
+  const promptHome = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-ai-select-prompts-'));
+  const code = `
+    import { Router } from './src/router/Router.js';
+    import { AiProviderSelectPage } from './src/pages/AiProviderSelectPage.js';
+    import { AiSettingsPage } from './src/pages/AiSettingsPage.js';
+    import { AiGateway } from './src/modules/AiGateway.js';
+    import { AiPromptManager } from './src/modules/AiPromptManager.js';
+    import { PromptsStore } from './src/storage/PromptsStore.js';
+
+    const copiedPrompts = [];
+    const openedUrls = [];
+    const mode = ${JSON.stringify(mode)};
+    const color = {
+      bold: (value) => value,
+      dim: (value) => value,
+      green: (value) => value,
+      yellow: (value) => value,
+      red: (value) => value,
+      darkYellow: (value) => value
+    };
+    const aiPromptManager = new AiPromptManager(new PromptsStore(${JSON.stringify(promptHome)}));
+    const clipboard = {
+      copy(text) {
+        copiedPrompts.push(text);
+        if (mode === 'failure') {
+          return { ok: false, warning: 'copy failed in smoke' };
+        }
+        return { ok: true, warning: null };
+      }
+    };
+    const browserOpener = {
+      open(url) {
+        openedUrls.push(url);
+        if (mode === 'failure') {
+          return { ok: false, warning: 'open failed in smoke' };
+        }
+        return { ok: true, warning: null };
+      }
+    };
+    const settings = {
+      color: true,
+      ai: {
+        globalMaxPromptCharacters: 100,
+        providers: [
+          { id: 'local-on', type: 'local', title: 'Enabled Local', enabled: true, priority: 1, endpointUrl: 'http://127.0.0.1:1234/v1/chat/completions', requestFormat: 'openai-compatible-chat', model: 'local', maxPromptCharacters: 100 },
+          { id: 'local-invalid', type: 'local', title: 'Invalid Local', enabled: true, priority: 2, endpointUrl: '', requestFormat: 'openai-compatible-chat', model: 'local', maxPromptCharacters: 100 },
+          { id: 'disabled-browser', type: 'browser', title: 'Disabled Browser', enabled: false, priority: 2, url: 'https://disabled.example/chat', maxPromptCharacters: 100 },
+          { id: 'first-browser', type: 'browser', title: 'First Browser', enabled: true, priority: 10, url: 'https://first.example/chat', maxPromptCharacters: 100 },
+          { id: 'beta-browser', type: 'browser', title: 'Beta Browser', enabled: true, priority: 20, url: 'https://beta.example/chat', maxPromptCharacters: 100 },
+          { id: 'alpha-browser', type: 'browser', title: 'Alpha Browser', enabled: true, priority: 20, url: 'https://alpha.example/chat', maxPromptCharacters: 100 }
+        ]
+      }
+    };
+    const runtime = {
+      settings,
+      color,
+      aiPromptManager,
+      aiGateway: new AiGateway({
+        aiPromptManager,
+        clipboard,
+        browserOpener,
+        localAiClient: {
+          async sendChatCompletion() {
+            return { ok: false, content: '', warning: 'local should not run in browser smoke' };
+          }
+        }
+      })
+    };
+    class ReturnPage {
+      async show() {
+        console.log('Return Page');
+      }
+    }
+    const router = new Router(runtime, {
+      returnPage: ReturnPage,
+      aiProviderSelect: AiProviderSelectPage,
+      aiSettings: AiSettingsPage
+    });
+
+    await router.open('returnPage');
+    await runtime.aiGateway.openProviderSelection(router, {
+      toolId: 'diff_summary',
+      projectName: 'Demo Project',
+      repoName: 'demo-repo',
+      returnPage: 'returnPage',
+      payload: {
+        payload: 'USER PAYLOAD',
+        size: 12,
+        maxPromptCharacters: 100,
+        inputSummary: 'staged, unstaged, untracked'
+      }
+    });
+
+    const copied = copiedPrompts[0] || '';
+    console.log('COPIED_HAS_SYSTEM ' + String(copied.includes('You summarize Git diffs')));
+    console.log('COPIED_HAS_PRE ' + String(copied.includes('Summarize the following prepared diff.')));
+    console.log('COPIED_ENDS_WITH_PAYLOAD ' + String(copied.endsWith('USER PAYLOAD')));
+    console.log('OPENED_URL ' + String(openedUrls[0] || ''));
+  `;
+
+  return spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+    cwd: root,
+    input,
+    encoding: 'utf8'
+  });
+}
+
+function runAiLocalProviderScenario(mode, input) {
+  const promptHome = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-ai-local-prompts-'));
+  const code = `
+    import { Router } from './src/router/Router.js';
+    import { AiProviderSelectPage } from './src/pages/AiProviderSelectPage.js';
+    import { AiResultPage } from './src/pages/AiResultPage.js';
+    import { AiGateway } from './src/modules/AiGateway.js';
+    import { LocalAiClient } from './src/modules/LocalAiClient.js';
+    import { AiPromptManager } from './src/modules/AiPromptManager.js';
+    import { PromptsStore } from './src/storage/PromptsStore.js';
+
+    const mode = ${JSON.stringify(mode)};
+    let requested = false;
+    let requestBody = null;
+    let requestHasAuth = false;
+    const endpointUrl = 'http://127.0.0.1:11434/v1/chat/completions';
+
+    const copiedResults = [];
+    const color = {
+      bold: (value) => value,
+      dim: (value) => value,
+      green: (value) => value,
+      yellow: (value) => value,
+      red: (value) => value,
+      darkYellow: (value) => value
+    };
+    const aiPromptManager = new AiPromptManager(new PromptsStore(${JSON.stringify(promptHome)}));
+    const fetchImplementation = async (url, options) => {
+      requested = true;
+      requestHasAuth = Boolean(options.headers?.authorization || options.headers?.Authorization);
+      requestBody = JSON.parse(options.body);
+
+      if (mode === 'connection') {
+        throw new Error('connect ECONNREFUSED in smoke');
+      }
+
+      if (mode === 'non2xx') {
+        return {
+          ok: false,
+          status: 503,
+          statusText: 'Service Unavailable',
+          async text() {
+            return 'local unavailable';
+          }
+        };
+      }
+
+      if (mode === 'invalid') {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          async text() {
+            return JSON.stringify({ choices: [{ message: {} }] });
+          }
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        async text() {
+          return JSON.stringify({
+            choices: [
+              { message: { content: 'Local summary result' } }
+            ]
+          });
+        }
+      };
+    };
+    const clipboard = {
+      copy(text) {
+        copiedResults.push(text);
+        return { ok: true, warning: null };
+      }
+    };
+    const settings = {
+      color: true,
+      ai: {
+        globalMaxPromptCharacters: 100,
+        providers: [
+          { id: 'local-on', type: 'local', title: 'Enabled Local', enabled: true, priority: 1, endpointUrl, requestFormat: 'openai-compatible-chat', model: 'test-model', maxPromptCharacters: 100 },
+          { id: 'browser-on', type: 'browser', title: 'Browser Provider', enabled: true, priority: 20, url: 'https://example.com/chat', maxPromptCharacters: 100 }
+        ]
+      }
+    };
+    const runtime = {
+      settings,
+      color,
+      clipboard,
+      aiPromptManager,
+      aiGateway: new AiGateway({
+        aiPromptManager,
+        clipboard,
+        browserOpener: { open() { return { ok: true, warning: null }; } },
+        localAiClient: new LocalAiClient(fetchImplementation)
+      })
+    };
+    class ReturnPage {
+      async show() {
+        console.log('Return Page');
+      }
+    }
+    const router = new Router(runtime, {
+      returnPage: ReturnPage,
+      aiProviderSelect: AiProviderSelectPage,
+      aiResult: AiResultPage
+    });
+
+    await router.open('returnPage');
+    await runtime.aiGateway.openProviderSelection(router, {
+      toolId: 'diff_summary',
+      projectName: 'Demo Project',
+      repoName: 'demo-repo',
+      payload: {
+        payload: 'USER PAYLOAD',
+        size: 12,
+        maxPromptCharacters: 100,
+        inputSummary: 'staged, unstaged, untracked'
+      }
+    });
+
+    console.log('SERVER_REQUESTED ' + String(requested));
+    console.log('COPIED_RESULT ' + String(copiedResults[0] || ''));
+
+    if (requestBody) {
+      console.log('REQUEST_MODEL ' + String(requestBody.model || ''));
+      console.log('REQUEST_HAS_AUTH ' + String(requestHasAuth));
+      console.log('REQUEST_SYSTEM_HAS_INTERNAL ' + String(requestBody.messages[0].content.includes('The diff payload may be truncated')));
+      console.log('REQUEST_USER_HAS_PAYLOAD ' + String(requestBody.messages[1].content.endsWith('USER PAYLOAD')));
+    }
+  `;
+
+  return spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+    cwd: root,
+    input,
+    encoding: 'utf8'
+  });
 }
 
 function smokeAddProjectPath() {
@@ -1063,6 +1468,15 @@ smokeNoColorBootFlagPath();
 smokeSettingsToggleColorPath();
 smokeAiSettingsPersistencePath();
 smokeAiPromptEditingPath();
+smokeAiDiffBuilderPayloadPath();
+smokeAiProviderSelectBrowserPath();
+smokeAiProviderSelectWarningPath();
+smokeAiProviderSelectSettingsPath();
+smokeAiLocalProviderSuccessPath();
+smokeAiLocalProviderCancelPath();
+smokeAiLocalProviderNon2xxPath();
+smokeAiLocalProviderInvalidShapePath();
+smokeAiLocalProviderConnectionFailurePath();
 smokePipedMultiCharacterActionPath();
 smokeProjectsPageRefreshPath();
 smokeAddProjectPath();

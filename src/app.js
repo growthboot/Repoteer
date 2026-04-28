@@ -9,7 +9,9 @@ import { CommitConfirmPage } from './pages/CommitConfirmPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { AiSettingsPage } from './pages/AiSettingsPage.js';
 import { AiProviderEditPage } from './pages/AiProviderEditPage.js';
+import { AiProviderSelectPage } from './pages/AiProviderSelectPage.js';
 import { AiPromptEditPage } from './pages/AiPromptEditPage.js';
+import { AiResultPage } from './pages/AiResultPage.js';
 import { BranchPage } from './pages/BranchPage.js';
 import { ProjectsStore } from './storage/ProjectsStore.js';
 import { SettingsStore } from './storage/SettingsStore.js';
@@ -20,6 +22,10 @@ import { ProjectManager } from './modules/ProjectManager.js';
 import { CommitManager } from './modules/CommitManager.js';
 import { BranchManager } from './modules/BranchManager.js';
 import { AiPromptManager } from './modules/AiPromptManager.js';
+import { AiDiffBuilder } from './modules/AiDiffBuilder.js';
+import { AiGateway } from './modules/AiGateway.js';
+import { BrowserOpener } from './modules/BrowserOpener.js';
+import { LocalAiClient } from './modules/LocalAiClient.js';
 import { Clipboard } from './modules/Clipboard.js';
 import { Git } from './modules/Git.js';
 import { Scanner } from './modules/Scanner.js';
@@ -41,7 +47,11 @@ export async function main(argv = process.argv.slice(2)) {
   const commitManager = new CommitManager(git);
   const branchManager = new BranchManager(git);
   const aiPromptManager = new AiPromptManager(promptsStore);
+  const aiDiffBuilder = new AiDiffBuilder(git);
   const clipboard = new Clipboard();
+  const browserOpener = new BrowserOpener();
+  const localAiClient = new LocalAiClient();
+  const aiGateway = new AiGateway({ aiPromptManager, clipboard, browserOpener, localAiClient });
   const forceColorDisabled = argv.includes('--no-color');
   const color = createColor({
     enabled: settings.color !== false,
@@ -61,7 +71,11 @@ export async function main(argv = process.argv.slice(2)) {
     commitManager,
     branchManager,
     aiPromptManager,
+    aiDiffBuilder,
+    aiGateway,
     clipboard,
+    browserOpener,
+    localAiClient,
     scanner,
     color,
     projectsPageHideClean: false,
@@ -93,7 +107,9 @@ export async function main(argv = process.argv.slice(2)) {
     settings: SettingsPage,
     aiSettings: AiSettingsPage,
     aiProviderEdit: AiProviderEditPage,
-    aiPromptEdit: AiPromptEditPage
+    aiProviderSelect: AiProviderSelectPage,
+    aiPromptEdit: AiPromptEditPage,
+    aiResult: AiResultPage
   });
 
   await router.open('projects');
