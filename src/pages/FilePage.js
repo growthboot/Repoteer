@@ -1,6 +1,7 @@
 import path from 'path';
 import { promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns, formatColumnPairs } from '../utils/menu.js';
+import { formatDiffForDisplay } from '../utils/diff.js';
 
 const MAX_VISIBLE_DIFF_CHARS = 12000;
 
@@ -49,7 +50,7 @@ export class FilePage {
         ? diff.diff.slice(0, MAX_VISIBLE_DIFF_CHARS) + '\n\n[truncated]'
         : diff.diff;
 
-      console.log(visible);
+      console.log(formatDiffForDisplay(visible, color));
     }
 
     console.log('');

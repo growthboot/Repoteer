@@ -12,6 +12,7 @@ import { DEFAULT_PROMPTS } from '../src/data/defaultPrompts.js';
 import { formatTable } from '../src/utils/table.js';
 import { formatActionColumns } from '../src/utils/menu.js';
 import { stripAnsi } from '../src/utils/color.js';
+import { formatDiffForDisplay } from '../src/utils/diff.js';
 import { formatBranchName } from '../src/utils/format.js';
 import { validateProjectInput } from '../src/utils/validation.js';
 
@@ -1202,6 +1203,27 @@ function smokeBranchFormatting() {
   assert(formatBranchName({ branch: null, branchDisplay: null, detached: false }, color) === '<darkYellow>unknown</darkYellow>', 'unknown branch should be dark yellow');
 }
 
+function smokeDiffFormatting() {
+  const color = {
+    green: (value) => '<green>' + value + '</green>',
+    red: (value) => '<red>' + value + '</red>'
+  };
+  const formatted = formatDiffForDisplay([
+    'diff --git a/test.js b/test.js',
+    '--- a/test.js',
+    '+++ b/test.js',
+    '@@ -1 +1 @@',
+    '-const value = 1;',
+    '+const value = 2;',
+    ' const context = true;'
+  ].join('\n'), color);
+
+  assert(formatted.includes('--- a/test.js'), 'diff formatter should not color removed file header');
+  assert(formatted.includes('+++ b/test.js'), 'diff formatter should not color added file header');
+  assert(formatted.includes('<red>-const value = 1;</red>'), 'diff formatter should color removed lines red');
+  assert(formatted.includes('<green>+const value = 2;</green>'), 'diff formatter should color added lines green');
+  assert(formatted.includes(' const context = true;'), 'diff formatter should leave context lines plain');
+}
 
 function smokeRepoPageOpenAndDiffPath() {
   if (!gitAvailable()) {
@@ -1578,6 +1600,7 @@ smokeProjectPageEditProjectPath();
 smokeProjectPageDeleteProjectPath();
 smokeProjectItemsPath();
 smokeScannerMissingProjectPath();
+smokeDiffFormatting();
 smokeDuplicateValidation();
 smokeTableFormatting();
 smokeBranchFormatting();
