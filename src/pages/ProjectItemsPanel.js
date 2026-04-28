@@ -243,6 +243,7 @@ export class ProjectItemsPanel {
     console.log('');
     formatActionColumns([
       this.color.bold('R.') + ' Run',
+      this.color.bold('T.') + ' Open in terminal',
       this.color.bold('E.') + ' Edit',
       this.color.bold('D.') + ' Delete',
       this.color.bold('B.') + ' Back'
@@ -254,6 +255,14 @@ export class ProjectItemsPanel {
 
     if (key === 'r') {
       this.runCommand(command);
+      console.log('');
+      await promptLine('Press Enter to continue.');
+      await this.showCommand(project, index);
+      return;
+    }
+
+    if (key === 't') {
+      this.openCommandInTerminal(command);
       console.log('');
       await promptLine('Press Enter to continue.');
       await this.showCommand(project, index);
@@ -423,4 +432,80 @@ export class ProjectItemsPanel {
       console.log('Command exited with status ' + String(result.status) + '.');
     }
   }
+
+  openCommandInTerminal(command) {
+    const result = this.spawnTerminal(command);
+
+    if (result.error) {
+      console.log('Open terminal failed: ' + result.error.message);
+    } else if (result.status !== 0) {
+      console.log('Open terminal failed.');
+    }
+  }
+
+  spawnTerminal(command) {
+    if (process.platform === 'darwin') {
+      return spawnSync('osascript', [
+        '-e',
+        'tell application "Terminal"',
+        '-e',
+        'activate',
+        '-e',
+        'do script ' + JSON.stringify('cd ' + shellQuote(command.workingDirectory) + ' && ' + command.command),
+        '-e',
+        'end tell'
+      ], {
+        stdio: 'inherit'
+      });
+    }
+
+    if (process.platform === 'win32') {
+      return spawnSync('cmd.exe', [
+        '/c',
+        'start',
+        '',
+        'cmd.exe',
+        '/k',
+        'cd /d "' + command.workingDirectory.replace(/"/g, '""') + '" && ' + command.command
+      ], {
+        stdio: 'inherit'
+      });
+    }
+
+    const terminal = process.env.TERMINAL;
+
+    if (terminal) {
+      return spawnSync(terminal, [
+        '-e',
+        'sh',
+        '-lc',
+        'cd ' + shellQuote(command.workingDirectory) + ' && ' + command.command + '; exec sh'
+      ], {
+        stdio: 'inherit'
+      });
+    }
+
+    for (const candidate of ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xfce4-terminal', 'xterm']) {
+      const result = spawnSync(candidate, [
+        '-e',
+        'sh',
+        '-lc',
+        'cd ' + shellQuote(command.workingDirectory) + ' && ' + command.command + '; exec sh'
+      ], {
+        stdio: 'inherit'
+      });
+
+      if (!result.error) {
+        return result;
+      }
+    }
+
+    return {
+      error: new Error('No terminal opener found. Set $TERMINAL to your terminal executable.')
+    };
+  }
+}
+
+function shellQuote(value) {
+  return "'" + String(value).replace(/'/g, "'\\''") + "'";
 }

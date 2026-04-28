@@ -101,6 +101,9 @@ Rules:
 * Sorted alphabetically
 * Bookmarks and commands shown on this screen are project-level.
 * Repo-specific bookmarks and commands are not part of the current scope.
+* Opening a bookmark shows a detail view with open, edit, delete, and back actions.
+* Opening a command shows a detail view with run, open in terminal, edit, delete, and back actions.
+* Opening a command in a new terminal is best-effort and must fail with a warning, not crash, if no compatible terminal opener is available.
 
 Actions:
 

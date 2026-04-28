@@ -521,6 +521,7 @@ function smokeProjectItemsPath() {
   assert(detailResult.stdout.includes('Command: project cli'), 'command detail path did not render title');
   assert(detailResult.stdout.includes('Command: echo ok'), 'command detail path did not render command');
   assert(detailResult.stdout.includes('Working directory: ' + projectPath), 'command detail path did not render working directory');
+  assert(detailResult.stdout.includes('T. Open in terminal'), 'command detail path did not render open in terminal action');
   assert(detailResult.stdout.includes('Bookmark deleted.'), 'bookmark detail path did not delete bookmark');
   assert(detailResult.stdout.includes('Command deleted.'), 'command detail path did not delete command');
   assert(readBookmarks(home).length === 0, 'project items should delete bookmark');
