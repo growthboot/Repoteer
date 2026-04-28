@@ -1,5 +1,5 @@
 import { promptAction, promptLine } from '../utils/input.js';
-import { formatShortcut } from '../utils/format.js';
+import { formatBranchName, formatShortcut } from '../utils/format.js';
 import { formatTable } from '../utils/table.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { ProjectItemsPanel } from './ProjectItemsPanel.js';
@@ -110,7 +110,7 @@ export class ProjectPage {
 
   renderRepos(repos, color) {
     const rows = [
-      ['', color.bold('Repo'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit')]
+      ['', color.bold('Repo'), color.bold('branch'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit')]
     ];
 
     repos.forEach((repo, index) => {
@@ -120,6 +120,7 @@ export class ProjectPage {
       rows.push([
         String(index + 1) + '.',
         repo.name,
+        formatBranchName(repo, color),
         color.green('+' + String(repo.added)) + ' / ' + color.red('-' + String(repo.removed)),
         repo.net < 0 ? color.red(net) : color.green(net),
         repo.warning ? color.yellow('warning') : this.formatModifiedFiles(repo.modifiedFiles),

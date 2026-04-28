@@ -7,6 +7,7 @@ import { Scanner } from '../src/modules/Scanner.js';
 import { formatTable } from '../src/utils/table.js';
 import { formatActionColumns } from '../src/utils/menu.js';
 import { stripAnsi } from '../src/utils/color.js';
+import { formatBranchName } from '../src/utils/format.js';
 import { validateProjectInput } from '../src/utils/validation.js';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
@@ -599,6 +600,21 @@ function smokeTableFormatting() {
   assert(stripAnsi(actionRows[0]).indexOf('R. Refresh') === stripAnsi(actionRows[1]).indexOf('S. Settings'), 'action columns should align right column');
 }
 
+function smokeBranchFormatting() {
+  const color = {
+    green: (value) => '<green>' + value + '</green>',
+    darkYellow: (value) => '<darkYellow>' + value + '</darkYellow>',
+    yellow: (value) => '<yellow>' + value + '</yellow>'
+  };
+
+  assert(formatBranchName({ branch: 'main', branchDisplay: 'main', detached: false }, color) === '<green>main</green>', 'main branch should be green');
+  assert(formatBranchName({ branch: 'master', branchDisplay: 'master', detached: false }, color) === '<green>master</green>', 'master branch should be green');
+  assert(formatBranchName({ branch: 'feature', branchDisplay: 'feature', detached: false }, color) === '<darkYellow>feature</darkYellow>', 'non-main branch should be dark yellow');
+  assert(formatBranchName({ branch: null, branchDisplay: 'detached HEAD (abc123)', detached: true }, color) === '<darkYellow>detached HEAD (abc123)</darkYellow>', 'detached HEAD should be dark yellow');
+  assert(formatBranchName({ branch: null, branchDisplay: null, detached: false }, color) === '<darkYellow>unknown</darkYellow>', 'unknown branch should be dark yellow');
+}
+
+
 function smokeRepoPageOpenAndDiffPath() {
   if (!gitAvailable()) {
     console.log('smoke repo page open skipped: git unavailable');
@@ -710,6 +726,164 @@ function smokeRepoHotfixConfirmPath() {
   assert(status.stdout.trim() === '', 'hotfix commit should include all tracked and untracked changes');
 }
 
+
+function smokeBranchScannerPath() {
+  if (!gitAvailable()) {
+    console.log('smoke branch scanner skipped: git unavailable');
+    return;
+  }
+
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-branch-scan-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
+  commitAll(repoPath, 'seed branch scanner');
+
+  const git = new Git();
+  const scanner = new Scanner(git);
+  const branch = git.getCurrentBranch(repoPath);
+  const snapshot = scanner.scanProjects([
+    { name: 'Branch Scan Project', path: projectPath, shortcut: null }
+  ]);
+  const repo = snapshot.projects[0].repos[0];
+
+  assert(branch.ok, branch.warning || 'current branch should be available');
+  assert(repo.branch === branch.branch, 'scanner should include current branch');
+  assert(repo.branchDisplay === branch.display, 'scanner should include branch display');
+  assert(repo.detached === false, 'scanner should mark attached HEAD');
+}
+
+function smokeBranchDetachedScannerPath() {
+  if (!gitAvailable()) {
+    console.log('smoke detached branch scanner skipped: git unavailable');
+    return;
+  }
+
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-detached-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
+  commitAll(repoPath, 'seed detached branch');
+  const rev = spawnSync('git', ['rev-parse', '--short', 'HEAD'], {
+    cwd: repoPath,
+    encoding: 'utf8'
+  });
+  runGit(['checkout', rev.stdout.trim()], repoPath);
+
+  const git = new Git();
+  const scanner = new Scanner(git);
+  const snapshot = scanner.scanProjects([
+    { name: 'Detached Project', path: projectPath, shortcut: null }
+  ]);
+  const repo = snapshot.projects[0].repos[0];
+
+  assert(repo.detached === true, 'scanner should mark detached HEAD');
+  assert(repo.branch === null, 'detached HEAD should not have branch name');
+  assert(repo.branchDisplay.includes('detached HEAD'), 'detached HEAD display should be clear');
+}
+
+function smokeBranchSwitchPath() {
+  if (!gitAvailable()) {
+    console.log('smoke branch switch skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-branch-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
+  commitAll(repoPath, 'seed branch switch');
+  const git = new Git();
+  const initialBranch = git.getCurrentBranch(repoPath);
+  runGit(['branch', 'feature'], repoPath);
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Branch Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp(['1', '1', 's', 'feature', '', 'b', 'b', 'q'].join('\n') + '\n', home);
+  const current = git.getCurrentBranch(repoPath);
+
+  assert(initialBranch.ok, initialBranch.warning || 'initial branch should be available');
+  assert(result.status === 0, result.stderr || 'branch switch path failed');
+  assert(result.stdout.includes('Branch: ' + initialBranch.branch), 'repo page should render active branch');
+  assert(result.stdout.includes('S. Switch branch'), 'repo page should render switch branch action');
+  assert(result.stdout.includes('Switch Branch: Branch Project / frontend'), 'branch page should render title');
+  assert(result.stdout.includes('Current branch: ' + initialBranch.branch), 'branch page should render current branch');
+  assert(result.stdout.includes('feature'), 'branch page should list existing local branch');
+  assert(result.stdout.includes('Switched to branch: feature'), 'branch page should confirm checkout');
+  assert(current.branch === 'feature', 'branch switch should checkout selected local branch');
+}
+
+function smokeDirtyBranchSwitchWarningPath() {
+  if (!gitAvailable()) {
+    console.log('smoke dirty branch switch skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-dirty-branch-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
+  commitAll(repoPath, 'seed dirty branch switch');
+  const git = new Git();
+  const initialBranch = git.getCurrentBranch(repoPath);
+  runGit(['branch', 'feature'], repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\nconst dirty = true;\n');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Dirty Branch Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp(['1', '1', 's', 'feature', 'no', '', 'b', 'b', 'b', 'q'].join('\n') + '\n', home);
+  const current = git.getCurrentBranch(repoPath);
+
+  assert(initialBranch.ok, initialBranch.warning || 'initial dirty branch should be available');
+  assert(result.status === 0, result.stderr || 'dirty branch switch path failed');
+  assert(result.stdout.includes('This repo has uncommitted changes.'), 'dirty branch switch should warn before checkout');
+  assert(result.stdout.includes('Git may refuse checkout if changes conflict.'), 'dirty branch switch should explain Git checkout behavior');
+  assert(result.stdout.includes('Branch switch canceled.'), 'dirty branch switch should allow cancellation');
+  assert(current.branch === initialBranch.branch, 'dirty branch switch cancellation should stay on current branch');
+}
+
+function smokeBranchNoColorPath() {
+  if (!gitAvailable()) {
+    console.log('smoke branch no color skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-branch-no-color-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
+  commitAll(repoPath, 'seed branch no color');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Branch No Color Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp(['1', '1', 'b', 'b', 'q'].join('\n') + '\n', home, ['--no-color']);
+
+  assert(result.status === 0, result.stderr || 'branch no-color path failed');
+  assert(result.stdout.includes('Branch: '), 'branch no-color path should render branch');
+  assert(!/\u001b\[[0-9;]*m/.test(result.stdout), 'branch no-color path emitted ANSI color');
+}
+
+
 function countOccurrences(text, value) {
   return text.split(value).length - 1;
 }
@@ -733,8 +907,14 @@ smokeProjectItemsPath();
 smokeScannerMissingProjectPath();
 smokeDuplicateValidation();
 smokeTableFormatting();
+smokeBranchFormatting();
 smokeRepoPageOpenAndDiffPath();
 smokeRepoFilePagePath();
 smokeRepoHotfixConfirmPath();
+smokeBranchScannerPath();
+smokeBranchDetachedScannerPath();
+smokeBranchSwitchPath();
+smokeDirtyBranchSwitchWarningPath();
+smokeBranchNoColorPath();
 
 console.log('smoke ok');

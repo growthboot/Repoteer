@@ -71,16 +71,19 @@ export class Scanner {
   scanRepo(repoPath) {
     const stats = this.git.getDiffStats(repoPath);
     const lastCommit = this.git.getLastCommitAge(repoPath);
+    const currentBranch = this.git.getCurrentBranch(repoPath);
     const warnings = [
       stats.ok ? null : stats.warning,
-      lastCommit.ok ? null : lastCommit.warning
+      lastCommit.ok ? null : lastCommit.warning,
+      currentBranch.ok ? null : currentBranch.warning
     ].filter(Boolean);
 
     return {
       name: path.basename(repoPath),
       path: repoPath,
-      branch: null,
-      detached: false,
+      branch: currentBranch.branch,
+      branchDisplay: currentBranch.display,
+      detached: currentBranch.detached,
       warning: warnings.length > 0 ? warnings.join(' ') : null,
       added: stats.added,
       removed: stats.removed,

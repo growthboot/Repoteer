@@ -221,6 +221,59 @@ export class Git {
     };
   }
 
+  getCurrentBranch(repoPath) {
+    const branch = this.run(['-C', repoPath, 'symbolic-ref', '--quiet', '--short', 'HEAD']);
+
+    if (branch.ok && branch.stdout) {
+      return {
+        ok: true,
+        branch: branch.stdout,
+        detached: false,
+        display: branch.stdout,
+        warning: null
+      };
+    }
+
+    const commit = this.run(['-C', repoPath, 'rev-parse', '--short', 'HEAD']);
+
+    if (commit.ok && commit.stdout) {
+      return {
+        ok: true,
+        branch: null,
+        detached: true,
+        display: 'detached HEAD (' + commit.stdout + ')',
+        warning: null
+      };
+    }
+
+    return {
+      ok: false,
+      branch: null,
+      detached: false,
+      display: 'unknown',
+      warning: branch.stderr || commit.stderr || 'Current branch not available.'
+    };
+  }
+
+  listLocalBranches(repoPath) {
+    const result = this.run(['-C', repoPath, 'for-each-ref', '--format=%(refname:short)', 'refs/heads']);
+
+    return {
+      ok: result.ok,
+      branches: result.ok ? this.parseLines(result.stdout).sort((a, b) => a.localeCompare(b)) : [],
+      warning: result.ok ? null : result.stderr || 'Local branches not available.'
+    };
+  }
+
+  checkoutBranch(repoPath, branchName) {
+    const result = this.run(['-C', repoPath, 'checkout', branchName]);
+
+    return {
+      ok: result.ok,
+      warning: result.ok ? null : result.stderr || 'Git checkout failed.'
+    };
+  }
+
   discardFileChanges(repoPath, file) {
     return this.fileOperations.discardFileChanges(repoPath, file);
   }

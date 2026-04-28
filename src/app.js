@@ -7,12 +7,14 @@ import { DiffPage } from './pages/DiffPage.js';
 import { FilePage } from './pages/FilePage.js';
 import { CommitConfirmPage } from './pages/CommitConfirmPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
+import { BranchPage } from './pages/BranchPage.js';
 import { ProjectsStore } from './storage/ProjectsStore.js';
 import { SettingsStore } from './storage/SettingsStore.js';
 import { BookmarksStore } from './storage/BookmarksStore.js';
 import { CommandsStore } from './storage/CommandsStore.js';
 import { ProjectManager } from './modules/ProjectManager.js';
 import { CommitManager } from './modules/CommitManager.js';
+import { BranchManager } from './modules/BranchManager.js';
 import { Clipboard } from './modules/Clipboard.js';
 import { Git } from './modules/Git.js';
 import { Scanner } from './modules/Scanner.js';
@@ -31,6 +33,7 @@ export async function main(argv = process.argv.slice(2)) {
   const git = new Git();
   const scanner = new Scanner(git);
   const commitManager = new CommitManager(git);
+  const branchManager = new BranchManager(git);
   const clipboard = new Clipboard();
   const forceColorDisabled = argv.includes('--no-color');
   const color = createColor({
@@ -48,6 +51,7 @@ export async function main(argv = process.argv.slice(2)) {
     projectManager,
     git,
     commitManager,
+    branchManager,
     clipboard,
     scanner,
     color,
@@ -76,6 +80,7 @@ export async function main(argv = process.argv.slice(2)) {
     diff: DiffPage,
     file: FilePage,
     commitConfirm: CommitConfirmPage,
+    branch: BranchPage,
     settings: SettingsPage
   });
 

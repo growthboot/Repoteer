@@ -2,6 +2,7 @@ import path from 'path';
 import { promptAction, promptLine } from '../utils/input.js';
 import { formatTable } from '../utils/table.js';
 import { formatActionColumns } from '../utils/menu.js';
+import { formatBranchName } from '../utils/format.js';
 
 export class RepoPage {
   constructor({ runtime, router, params }) {
@@ -25,6 +26,7 @@ export class RepoPage {
     }
 
     console.log(color.bold('Repo: ' + project.name + ' / ' + repo.name));
+    console.log('Branch: ' + formatBranchName(repo, color));
     console.log('');
 
     if (repo.warning) {
@@ -51,6 +53,7 @@ export class RepoPage {
       color.bold('M.') + ' Generate commit',
       color.bold('H.') + ' Hotfix commit',
       color.bold('P.') + ' Write a commit & push',
+      color.bold('S.') + ' Switch branch',
       color.bold('B.') + ' Back',
       color.bold('R.') + ' Refresh'
     ]).forEach((row) => console.log(row));
@@ -66,6 +69,14 @@ export class RepoPage {
 
     if (key === 'r') {
       await this.router.replace('repo', this.params);
+      return;
+    }
+
+    if (key === 's') {
+      await this.router.open('branch', {
+        projectName: project.name,
+        repoPath: repo.path
+      });
       return;
     }
 
