@@ -38,6 +38,17 @@ export class SettingsStore {
     return next;
   }
 
+  setAlternateScreen(enabled) {
+    const next = {
+      ...this.get(),
+      alternateScreen: enabled === true
+    };
+
+    this.store.write(next);
+
+    return next;
+  }
+
   setAiGlobalMaxPromptCharacters(value) {
     const next = this.get();
     next.ai.globalMaxPromptCharacters = normalizePositiveInteger(value, DEFAULT_AI_GLOBAL_MAX_PROMPT_CHARACTERS);
@@ -110,6 +121,7 @@ function normalizeSettings(settings) {
   return {
     ...settings,
     color: settings.color !== false,
+    alternateScreen: settings.alternateScreen !== false,
     ai: normalizeAiSettings(settings.ai)
   };
 }

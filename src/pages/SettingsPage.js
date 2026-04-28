@@ -10,6 +10,7 @@ export class SettingsPage {
   async show() {
     const color = this.runtime.color;
     const colorEnabled = this.runtime.settings.color !== false;
+    const alternateScreenEnabled = this.runtime.settings.alternateScreen !== false;
     const ai = this.runtime.settings.ai;
     const enabledProviders = ai.providers.filter((provider) => provider.enabled).length;
     const disabledProviders = ai.providers.length - enabledProviders;
@@ -18,6 +19,7 @@ export class SettingsPage {
     console.log(color.bold('Settings'));
     console.log('');
     console.log(color.bold('General'));
+    console.log('Alternate screen              ' + this.formatEnabled(alternateScreenEnabled));
     console.log('Color                         ' + this.formatEnabled(colorEnabled));
     console.log('');
     console.log(color.bold('AI'));
@@ -25,6 +27,7 @@ export class SettingsPage {
     console.log('Global max prompt size        ' + String(ai.globalMaxPromptCharacters) + ' characters');
     console.log('');
     formatActionColumns([
+      color.bold('L.') + ' Toggle alternate screen',
       color.bold('T.') + ' Toggle color',
       color.bold('A.') + ' AI settings',
       color.bold('B.') + ' Back'
@@ -36,6 +39,11 @@ export class SettingsPage {
 
     if (key === 't') {
       await this.toggleColor(colorEnabled);
+      return;
+    }
+
+    if (key === 'l') {
+      await this.toggleAlternateScreen(alternateScreenEnabled);
       return;
     }
 
@@ -59,6 +67,17 @@ export class SettingsPage {
 
     console.log('');
     console.log(this.runtime.color.green('Color ' + (next.color ? 'enabled.' : 'disabled.')));
+    await promptLine('Press Enter to continue.');
+    await this.router.replace('settings');
+  }
+
+  async toggleAlternateScreen(alternateScreenEnabled) {
+    const next = this.runtime.settingsStore.setAlternateScreen(!alternateScreenEnabled);
+    this.runtime.settings = next;
+    this.runtime.terminal.setAlternateScreenEnabled(next.alternateScreen !== false);
+
+    console.log('');
+    console.log(this.runtime.color.green('Alternate screen ' + (next.alternateScreen ? 'enabled.' : 'disabled.')));
     await promptLine('Press Enter to continue.');
     await this.router.replace('settings');
   }

@@ -45,6 +45,7 @@ export const DEFAULT_AI_PROVIDERS = [
 
 export const DEFAULT_SETTINGS = {
   color: true,
+  alternateScreen: true,
   ai: {
     globalMaxPromptCharacters: DEFAULT_AI_GLOBAL_MAX_PROMPT_CHARACTERS,
     providers: DEFAULT_AI_PROVIDERS

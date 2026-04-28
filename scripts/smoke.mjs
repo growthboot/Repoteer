@@ -140,6 +140,7 @@ function smokeQuitPath() {
   assert(Array.isArray(readProjects(home)), 'quit path did not create projects array');
   assert(readProjects(home).length === 0, 'quit path should not add projects');
   assert(readSettings(home).color === true, 'quit path did not create default color setting');
+  assert(readSettings(home).alternateScreen === true, 'quit path did not create default alternate screen setting');
   assert(readSettings(home).ai.globalMaxPromptCharacters === 15000, 'quit path did not create default AI prompt size');
   assert(readSettings(home).ai.providers.length === 4, 'quit path did not create default AI providers');
   assert(readPrompts(home)['commit_review.system'] === DEFAULT_PROMPTS['commit_review.system'], 'quit path did not create default commit review system prompt');
@@ -174,16 +175,21 @@ function smokeNoColorBootFlagPath() {
 
 function smokeSettingsToggleColorPath() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
-  const input = ['s', 't', '', 'b', 'q'].join('\n') + '\n';
+  const input = ['s', 'l', '', 't', '', 'b', 'q'].join('\n') + '\n';
   const result = runApp(input, home);
 
   assert(result.status === 0, result.stderr || 'settings toggle color path failed');
   assert(result.stdout.includes('S. Settings'), 'projects page did not render settings action');
   assert(result.stdout.includes('Settings'), 'settings page did not render title');
   assert(result.stdout.includes('Color                         On'), 'settings page did not render color on state');
+  assert(result.stdout.includes('Alternate screen              On'), 'settings page did not render alternate screen on state');
+  assert(result.stdout.includes('L. Toggle alternate screen'), 'settings page did not render alternate screen action');
+  assert(result.stdout.includes('Alternate screen disabled.'), 'settings page did not confirm disabled alternate screen');
+  assert(result.stdout.includes('Alternate screen              Off'), 'settings page did not render alternate screen off state');
   assert(result.stdout.includes('A. AI settings'), 'settings page did not render AI settings action');
   assert(result.stdout.includes('Color disabled.'), 'settings page did not confirm disabled color');
   assert(result.stdout.includes('Color                         Off'), 'settings page did not render color off state');
+  assert(readSettings(home).alternateScreen === false, 'settings toggle did not persist alternateScreen=false');
   assert(readSettings(home).color === false, 'settings toggle did not persist color=false');
 }
 

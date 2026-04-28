@@ -32,6 +32,7 @@ import { Scanner } from './modules/Scanner.js';
 import { resolveRuntimePaths } from './config/paths.js';
 import { createColor } from './utils/color.js';
 import { closeInput } from './utils/input.js';
+import { createTerminalSession } from './utils/terminal.js';
 
 export async function main(argv = process.argv.slice(2)) {
   const paths = resolveRuntimePaths();
@@ -57,6 +58,9 @@ export async function main(argv = process.argv.slice(2)) {
     enabled: settings.color !== false,
     forceDisabled: forceColorDisabled
   });
+  const terminal = createTerminalSession({
+    enabled: settings.alternateScreen !== false
+  });
 
   const runtime = {
     paths,
@@ -77,6 +81,7 @@ export async function main(argv = process.argv.slice(2)) {
     browserOpener,
     localAiClient,
     scanner,
+    terminal,
     color,
     projectsPageHideClean: false,
     snapshot: { projects: [] },
@@ -92,27 +97,32 @@ export async function main(argv = process.argv.slice(2)) {
       return this.color;
     }
   };
+  terminal.enterAlternateScreen();
 
-  runtime.refreshSnapshot();
+  try {
+    runtime.refreshSnapshot();
 
-  const router = new Router(runtime, {
-    projects: ProjectsPage,
-    addProject: AddProjectPage,
-    project: ProjectPage,
-    repo: RepoPage,
-    diff: DiffPage,
-    file: FilePage,
-    commitConfirm: CommitConfirmPage,
-    branch: BranchPage,
-    settings: SettingsPage,
-    aiSettings: AiSettingsPage,
-    aiProviderEdit: AiProviderEditPage,
-    aiProviderSelect: AiProviderSelectPage,
-    aiPromptEdit: AiPromptEditPage,
-    aiResult: AiResultPage
-  });
+    const router = new Router(runtime, {
+      projects: ProjectsPage,
+      addProject: AddProjectPage,
+      project: ProjectPage,
+      repo: RepoPage,
+      diff: DiffPage,
+      file: FilePage,
+      commitConfirm: CommitConfirmPage,
+      branch: BranchPage,
+      settings: SettingsPage,
+      aiSettings: AiSettingsPage,
+      aiProviderEdit: AiProviderEditPage,
+      aiProviderSelect: AiProviderSelectPage,
+      aiPromptEdit: AiPromptEditPage,
+      aiResult: AiResultPage
+    });
 
-  await router.open('projects');
+    await router.open('projects');
+  } finally {
+    terminal.exitAlternateScreen();
+  }
 }
 
 if (import.meta.url === 'file://' + process.argv[1]) {
