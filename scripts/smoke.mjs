@@ -93,6 +93,16 @@ function readSettings(home) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+function readBookmarks(home) {
+  const file = path.join(home, '.repoteer', 'storage', 'bookmarks.json');
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function readCommands(home) {
+  const file = path.join(home, '.repoteer', 'storage', 'commands.json');
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
 function smokeQuitPath() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
   const result = runApp('q\n', home);
@@ -332,7 +342,7 @@ function smokeProjectsPageNumberSelectionPath() {
     { name: 'Select Project', path: projectPath, shortcut: null }
   ], null, 2) + '\n');
 
-  const result = runApp('1\nq\n', home);
+  const result = runApp('1\nb\nq\n', home);
 
   assert(result.status === 0, result.stderr || 'projects page number selection path failed');
   assert(result.stdout.includes('Project: Select Project'), 'number selection should open selected project view');
@@ -367,7 +377,7 @@ function smokeProjectPageHideReposWithoutLineChangesPath() {
     { name: 'Repo Toggle Project', path: projectPath, shortcut: null }
   ], null, 2) + '\n');
 
-  const result = runApp('1\nt\nq\n', home);
+  const result = runApp('1\nt\nb\nq\n', home);
 
   assert(result.status === 0, result.stderr || 'project page repo toggle path failed');
   assert(result.stdout.includes('T. Hide repos without line changes'), 'project page did not render hide repos toggle action');
@@ -397,7 +407,7 @@ function smokeProjectPageEditProjectPath() {
     { name: 'Edit Project', path: originalProjectPath, shortcut: null }
   ], null, 2) + '\n');
 
-  const input = ['1', 'e', 'Renamed Project', renamedProjectPath, 'z', '', 'q'].join('\n') + '\n';
+  const input = ['1', 'r', 'Renamed Project', renamedProjectPath, 'z', '', 'b', 'q'].join('\n') + '\n';
   const result = runApp(input, home);
 
   assert(result.status === 0, result.stderr || 'project page edit path failed');
@@ -434,6 +444,88 @@ function smokeProjectPageDeleteProjectPath() {
   assert(readProjects(home).length === 0, 'delete path should remove project from storage');
 }
 
+
+function smokeProjectItemsPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-items-project-'));
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Items Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const addInput = [
+    '1',
+    'ab',
+    'Dashboard',
+    'https://example.com/dashboard',
+    'Project dashboard',
+    '',
+    'ac',
+    'project cli',
+    'echo ok',
+    '',
+    'CLI notes',
+    '',
+    'b',
+    'q'
+  ].join('\n') + '\n';
+  const addResult = runApp(addInput, home);
+
+  assert(addResult.status === 0, addResult.stderr || 'project items add path failed');
+  assert(addResult.stdout.includes('Bookmarks'), 'project items add path did not render bookmarks header');
+  assert(addResult.stdout.includes('Commands'), 'project items add path did not render commands header');
+  assert(addResult.stdout.includes('ab. Add bookmark'), 'project items add path did not render add bookmark action');
+  assert(addResult.stdout.includes('ac. Add command'), 'project items add path did not render add command action');
+  assert(addResult.stdout.includes('Bookmark saved.'), 'project items add path did not save bookmark');
+  assert(addResult.stdout.includes('Command saved.'), 'project items add path did not save command');
+  assert(addResult.stdout.includes('b1. Dashboard'), 'project items add path did not render saved bookmark');
+  assert(addResult.stdout.includes('c1. project cli'), 'project items add path did not render saved command');
+
+  const bookmarks = readBookmarks(home);
+  const commands = readCommands(home);
+
+  assert(bookmarks.length === 1, 'project items should save one bookmark');
+  assert(bookmarks[0].projectName === 'Items Project', 'bookmark project name mismatch');
+  assert(bookmarks[0].title === 'Dashboard', 'bookmark title mismatch');
+  assert(bookmarks[0].target === 'https://example.com/dashboard', 'bookmark target mismatch');
+  assert(commands.length === 1, 'project items should save one command');
+  assert(commands[0].projectName === 'Items Project', 'command project name mismatch');
+  assert(commands[0].title === 'project cli', 'command title mismatch');
+  assert(commands[0].command === 'echo ok', 'command text mismatch');
+  assert(commands[0].workingDirectory === projectPath, 'command working directory should default to project path');
+
+  const detailInput = [
+    '1',
+    'b1',
+    'b',
+    'c1',
+    'b',
+    'b1',
+    'd',
+    'yes',
+    '',
+    'c1',
+    'd',
+    'yes',
+    '',
+    'b',
+    'q'
+  ].join('\n') + '\n';
+  const detailResult = runApp(detailInput, home);
+
+  assert(detailResult.status === 0, detailResult.stderr || 'project items detail path failed');
+  assert(detailResult.stdout.includes('Bookmark: Dashboard'), 'bookmark detail path did not render title');
+  assert(detailResult.stdout.includes('URL/path: https://example.com/dashboard'), 'bookmark detail path did not render target');
+  assert(detailResult.stdout.includes('Command: project cli'), 'command detail path did not render title');
+  assert(detailResult.stdout.includes('Command: echo ok'), 'command detail path did not render command');
+  assert(detailResult.stdout.includes('Working directory: ' + projectPath), 'command detail path did not render working directory');
+  assert(detailResult.stdout.includes('Bookmark deleted.'), 'bookmark detail path did not delete bookmark');
+  assert(detailResult.stdout.includes('Command deleted.'), 'command detail path did not delete command');
+  assert(readBookmarks(home).length === 0, 'project items should delete bookmark');
+  assert(readCommands(home).length === 0, 'project items should delete command');
+}
 
 function smokeScannerMissingProjectPath() {
   const git = new Git();
@@ -525,6 +617,7 @@ smokeProjectsPageNumberSelectionPath();
 smokeProjectPageHideReposWithoutLineChangesPath();
 smokeProjectPageEditProjectPath();
 smokeProjectPageDeleteProjectPath();
+smokeProjectItemsPath();
 smokeScannerMissingProjectPath();
 smokeDuplicateValidation();
 smokeTableFormatting();

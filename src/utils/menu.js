@@ -1,8 +1,13 @@
 import { stripAnsi } from './color.js';
 
 export function formatActionColumns(actions, options = {}) {
-  const gap = options.gap ?? '    ';
   const pairs = chunkPairs(actions);
+
+  return formatColumnPairs(pairs, options);
+}
+
+export function formatColumnPairs(pairs, options = {}) {
+  const gap = options.gap ?? '    ';
   const leftWidth = pairs.reduce((width, pair) => {
     return Math.max(width, stripAnsi(pair[0]).length);
   }, 0);

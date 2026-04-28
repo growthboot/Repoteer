@@ -2,6 +2,7 @@ import { promptAction, promptLine } from '../utils/input.js';
 import { formatShortcut } from '../utils/format.js';
 import { formatTable } from '../utils/table.js';
 import { formatActionColumns } from '../utils/menu.js';
+import { ProjectItemsPanel } from './ProjectItemsPanel.js';
 
 export class ProjectsPage {
   constructor({ runtime, router }) {
@@ -161,19 +162,32 @@ export class ProjectsPage {
       formattedRows.slice(1).forEach((row) => console.log(row));
     }
 
+    const itemsPanel = new ProjectItemsPanel({
+      runtime: this.runtime,
+      color,
+      showProject: async (nextProjectName) => {
+        await this.showProject(nextProjectName);
+      }
+    });
+
+    console.log('');
+    itemsPanel.render(project.name);
     console.log('');
     formatActionColumns([
-      color.bold('T.') + ' ' + (hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes'),
-      color.bold('R.') + ' Refresh',
-      color.bold('E.') + ' Edit project',
-      color.bold('D.') + ' Delete project',
       color.bold('B.') + ' Back',
-      color.bold('Q.') + ' Quit'
+      color.bold('T.') + ' ' + (hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes'),
+      color.bold('D.') + ' Delete project',
+      color.bold('R.') + ' Rename project'
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
+
+    if (key === 'b' || key === '\u001b') {
+      await this.router.replace('projects');
+      return;
+    }
 
     if (key === 't') {
       this.runtime.projectsPageHideReposWithoutLineChanges = !hideReposWithoutLineChanges;
@@ -182,11 +196,6 @@ export class ProjectsPage {
     }
 
     if (key === 'r') {
-      await this.showProject(project.name);
-      return;
-    }
-
-    if (key === 'e') {
       await this.editProject(project);
       return;
     }
@@ -196,11 +205,11 @@ export class ProjectsPage {
       return;
     }
 
-    if (key === 'q') {
+    if (await itemsPanel.handleAction(project, key)) {
       return;
     }
 
-    await this.router.replace('projects');
+    await this.showProject(project.name);
   }
 
   async editProject(project) {
@@ -250,6 +259,10 @@ export class ProjectsPage {
       return;
     }
 
+    if (result.project.name !== project.name) {
+      this.runtime.bookmarksStore.renameProject(project.name, result.project.name);
+      this.runtime.commandsStore.renameProject(project.name, result.project.name);
+    }
     console.log(color.green('Project updated.'));
     await promptLine('Press Enter to continue.');
     await this.showProject(result.project.name);
@@ -282,6 +295,9 @@ export class ProjectsPage {
       await this.router.replace('projects');
       return;
     }
+
+    this.runtime.bookmarksStore.deleteProject(project.name);
+    this.runtime.commandsStore.deleteProject(project.name);
 
     console.log(color.green('Project deleted.'));
     await promptLine('Press Enter to continue.');

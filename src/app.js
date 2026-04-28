@@ -4,6 +4,8 @@ import { AddProjectPage } from './pages/AddProjectPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { ProjectsStore } from './storage/ProjectsStore.js';
 import { SettingsStore } from './storage/SettingsStore.js';
+import { BookmarksStore } from './storage/BookmarksStore.js';
+import { CommandsStore } from './storage/CommandsStore.js';
 import { ProjectManager } from './modules/ProjectManager.js';
 import { Git } from './modules/Git.js';
 import { Scanner } from './modules/Scanner.js';
@@ -15,6 +17,8 @@ export async function main(argv = process.argv.slice(2)) {
   const paths = resolveRuntimePaths();
   const projectsStore = new ProjectsStore(paths.storageDir);
   const settingsStore = new SettingsStore(paths.storageDir);
+  const bookmarksStore = new BookmarksStore(paths.storageDir);
+  const commandsStore = new CommandsStore(paths.storageDir);
   const settings = settingsStore.get();
   const projectManager = new ProjectManager(projectsStore);
   const git = new Git();
@@ -30,6 +34,8 @@ export async function main(argv = process.argv.slice(2)) {
     settings,
     settingsStore,
     projectsStore,
+    bookmarksStore,
+    commandsStore,
     projectManager,
     git,
     scanner,

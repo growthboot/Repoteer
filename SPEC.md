@@ -87,14 +87,11 @@ Project: AppVideoStudio
 Bookmarks                           Commands
 
 b1. Dashboard                       c1. project cli
-b2. Dev homepage
+b2. Dev homepage                    ac. Add command
+ab. Add bookmark
 
 B. Back                             T. Toggle dirty repos               
 D. Delete project                   R. Rename project
-
-ab. Add bookmark                    ac. Add command
-rb[0-9]. Remove bookmark            rc[0-9]. Remove command
-vb[0-9]. View bookmark details      vc[0-9]. View command details
 ```
 
 Rules:
