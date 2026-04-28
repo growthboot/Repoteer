@@ -101,7 +101,7 @@ export class ProjectsPage {
       }) ?? null;
 
     if (selectedProject) {
-      await this.showProject(selectedProject.name);
+      await this.router.open('project', { projectName: selectedProject.name });
       return;
     }
 

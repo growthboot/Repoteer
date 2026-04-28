@@ -128,15 +128,225 @@ export class Git {
     };
   }
 
+  getFileDiffStats(repoPath) {
+    const unstaged = this.run(['-C', repoPath, 'diff', '--numstat', '--no-ext-diff']);
+    const staged = this.run(['-C', repoPath, 'diff', '--cached', '--numstat', '--no-ext-diff']);
+    const status = this.run(['-C', repoPath, 'status', '--porcelain']);
+    const untracked = this.run(['-C', repoPath, 'ls-files', '--others', '--exclude-standard']);
+
+    for (const result of [unstaged, staged, status, untracked]) {
+      if (!result.ok) {
+        return {
+          ok: false,
+          files: [],
+          warning: result.stderr || 'Git file diff stats failed.'
+        };
+      }
+    }
+
+    const files = new Map();
+
+    for (const line of [...this.parseLines(unstaged.stdout), ...this.parseLines(staged.stdout)]) {
+      const parsed = this.parseNumstatLine(line);
+
+      if (!parsed) {
+        continue;
+      }
+
+      const current = files.get(parsed.file) ?? {
+        file: parsed.file,
+        added: 0,
+        removed: 0
+      };
+
+      current.added += parsed.added;
+      current.removed += parsed.removed;
+      files.set(parsed.file, current);
+    }
+
+    for (const file of this.parseLines(untracked.stdout)) {
+      const current = files.get(file) ?? {
+        file,
+        added: 0,
+        removed: 0
+      };
+
+      current.added += this.countFileLines(path.join(repoPath, file));
+      files.set(file, current);
+    }
+
+    const changedNames = new Set();
+
+    for (const line of this.parseLines(status.stdout)) {
+      const file = this.parseStatusFile(line);
+
+      if (file) {
+        changedNames.add(file);
+      }
+    }
+
+    for (const file of changedNames) {
+      if (!files.has(file)) {
+        files.set(file, {
+          file,
+          added: 0,
+          removed: 0
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      files: [...files.values()].map((file) => {
+        const lastCommit = this.getFileLastCommitAge(repoPath, file.file);
+
+        return {
+          ...file,
+          net: file.added - file.removed,
+          lastCommitAgo: lastCommit.age,
+          warning: lastCommit.ok ? null : lastCommit.warning
+        };
+      }).sort((a, b) => a.file.localeCompare(b.file)),
+      warning: null
+    };
+  }
+
+  getFullDiff(repoPath) {
+    const unstaged = this.run(['-C', repoPath, 'diff', '--no-ext-diff']);
+    const staged = this.run(['-C', repoPath, 'diff', '--cached', '--no-ext-diff']);
+    const untracked = this.run(['-C', repoPath, 'ls-files', '--others', '--exclude-standard']);
+
+    for (const result of [unstaged, staged, untracked]) {
+      if (!result.ok) {
+        return {
+          ok: false,
+          diff: '',
+          warning: result.stderr || 'Git diff failed.'
+        };
+      }
+    }
+
+    const parts = [];
+
+    if (staged.stdout) {
+      parts.push(staged.stdout);
+    }
+
+    if (unstaged.stdout) {
+      parts.push(unstaged.stdout);
+    }
+
+    for (const file of this.parseLines(untracked.stdout)) {
+      const fileDiff = this.buildUntrackedFileDiff(repoPath, file);
+
+      if (fileDiff) {
+        parts.push(fileDiff);
+      }
+    }
+
+    return {
+      ok: true,
+      diff: parts.join('\n\n'),
+      warning: null
+    };
+  }
+
+  getFileLastCommitAge(repoPath, file) {
+    const result = this.run(['-C', repoPath, 'log', '-1', '--format=%ct', '--', file]);
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        age: null,
+        warning: result.stderr || 'File last commit not available.'
+      };
+    }
+
+    if (!result.stdout) {
+      return {
+        ok: true,
+        age: null,
+        warning: null
+      };
+    }
+
+    const timestamp = Number(result.stdout) * 1000;
+
+    if (!Number.isFinite(timestamp)) {
+      return {
+        ok: false,
+        age: null,
+        warning: 'File last commit timestamp was invalid.'
+      };
+    }
+
+    return {
+      ok: true,
+      age: this.formatAge(Date.now() - timestamp),
+      warning: null
+    };
+  }
+
+  commit(repoPath, title, body) {
+    const add = this.run(['-C', repoPath, 'add', '-A']);
+
+    if (!add.ok) {
+      return {
+        ok: false,
+        warning: add.stderr || 'Git add failed.'
+      };
+    }
+
+    const args = ['-C', repoPath, 'commit', '-m', title];
+
+    if (body.trim()) {
+      args.push('-m', body);
+    }
+
+    const result = this.run(args);
+
+    return {
+      ok: result.ok,
+      warning: result.ok ? null : result.stderr || 'Git commit failed.'
+    };
+  }
+
+  push(repoPath) {
+    const result = this.run(['-C', repoPath, 'push']);
+
+    return {
+      ok: result.ok,
+      warning: result.ok ? null : result.stderr || 'Git push failed.'
+    };
+  }
+
   parseNumstat(output) {
     return this.parseLines(output).reduce((stats, line) => {
-      const [added, removed] = line.split('\t');
+      const parsed = this.parseNumstatLine(line);
+
+      if (!parsed) {
+        return stats;
+      }
 
       return {
-        added: stats.added + this.parseNumstatNumber(added),
-        removed: stats.removed + this.parseNumstatNumber(removed)
+        added: stats.added + parsed.added,
+        removed: stats.removed + parsed.removed
       };
     }, { added: 0, removed: 0 });
+  }
+
+  parseNumstatLine(line) {
+    const parts = line.split('\t');
+
+    if (parts.length < 3) {
+      return null;
+    }
+
+    return {
+      added: this.parseNumstatNumber(parts[0]),
+      removed: this.parseNumstatNumber(parts[1]),
+      file: parts.slice(2).join('\t')
+    };
   }
 
   parseNumstatNumber(value) {
@@ -159,6 +369,61 @@ export class Git {
     }
 
     return output.split(/\r?\n/).filter(Boolean);
+  }
+
+  parseStatusFile(line) {
+    if (line.length < 4) {
+      return null;
+    }
+
+    const value = line.slice(3);
+
+    if (!value) {
+      return null;
+    }
+
+    const renameParts = value.split(' -> ');
+    return renameParts[renameParts.length - 1];
+  }
+
+  buildUntrackedFileDiff(repoPath, file) {
+    const filePath = path.join(repoPath, file);
+
+    try {
+      const stats = fs.statSync(filePath);
+
+      if (!stats.isFile()) {
+        return null;
+      }
+
+      const content = fs.readFileSync(filePath);
+
+      if (content.includes(0)) {
+        return [
+          'diff --git a/' + file + ' b/' + file,
+          'new file mode 100644',
+          'Binary files /dev/null and b/' + file + ' differ'
+        ].join('\n');
+      }
+
+      const text = content.toString('utf8');
+      const lines = text ? text.split('\n') : [];
+
+      if (lines.length > 0 && lines[lines.length - 1] === '') {
+        lines.pop();
+      }
+
+      return [
+        'diff --git a/' + file + ' b/' + file,
+        'new file mode 100644',
+        '--- /dev/null',
+        '+++ b/' + file,
+        '@@ -0,0 +1,' + String(lines.length) + ' @@',
+        ...lines.map((line) => '+' + line)
+      ].join('\n');
+    } catch {
+      return null;
+    }
   }
 
   countFileLines(filePath) {

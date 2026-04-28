@@ -1,12 +1,18 @@
 import { Router } from './router/Router.js';
 import { ProjectsPage } from './pages/ProjectsPage.js';
 import { AddProjectPage } from './pages/AddProjectPage.js';
+import { ProjectPage } from './pages/ProjectPage.js';
+import { RepoPage } from './pages/RepoPage.js';
+import { DiffPage } from './pages/DiffPage.js';
+import { CommitConfirmPage } from './pages/CommitConfirmPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { ProjectsStore } from './storage/ProjectsStore.js';
 import { SettingsStore } from './storage/SettingsStore.js';
 import { BookmarksStore } from './storage/BookmarksStore.js';
 import { CommandsStore } from './storage/CommandsStore.js';
 import { ProjectManager } from './modules/ProjectManager.js';
+import { CommitManager } from './modules/CommitManager.js';
+import { Clipboard } from './modules/Clipboard.js';
 import { Git } from './modules/Git.js';
 import { Scanner } from './modules/Scanner.js';
 import { resolveRuntimePaths } from './config/paths.js';
@@ -23,6 +29,8 @@ export async function main(argv = process.argv.slice(2)) {
   const projectManager = new ProjectManager(projectsStore);
   const git = new Git();
   const scanner = new Scanner(git);
+  const commitManager = new CommitManager(git);
+  const clipboard = new Clipboard();
   const forceColorDisabled = argv.includes('--no-color');
   const color = createColor({
     enabled: settings.color !== false,
@@ -38,6 +46,8 @@ export async function main(argv = process.argv.slice(2)) {
     commandsStore,
     projectManager,
     git,
+    commitManager,
+    clipboard,
     scanner,
     color,
     projectsPageHideClean: false,
@@ -60,6 +70,10 @@ export async function main(argv = process.argv.slice(2)) {
   const router = new Router(runtime, {
     projects: ProjectsPage,
     addProject: AddProjectPage,
+    project: ProjectPage,
+    repo: RepoPage,
+    diff: DiffPage,
+    commitConfirm: CommitConfirmPage,
     settings: SettingsPage
   });
 

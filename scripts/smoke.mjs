@@ -599,6 +599,79 @@ function smokeTableFormatting() {
   assert(stripAnsi(actionRows[0]).indexOf('R. Refresh') === stripAnsi(actionRows[1]).indexOf('S. Settings'), 'action columns should align right column');
 }
 
+function smokeRepoPageOpenAndDiffPath() {
+  if (!gitAvailable()) {
+    console.log('smoke repo page open skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-repo-page-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
+  commitAll(repoPath, 'seed repo page');
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\nconst next = 2;\n');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Repo Page Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp(['1', '1', 'v', 'b', 'b', 'b', 'q'].join('\n') + '\n', home);
+
+  assert(result.status === 0, result.stderr || 'repo page open and diff path failed');
+  assert(result.stdout.includes('Repo: Repo Page Project / frontend'), 'repo page should render selected repo title');
+  assert(result.stdout.includes('V. View full diff'), 'repo page should render view diff action');
+  assert(result.stdout.includes('H. Hotfix commit'), 'repo page should render hotfix action');
+  assert(result.stdout.includes('Repo: frontend (diff)'), 'diff page should render title');
+  assert(result.stdout.includes('+const next = 2;'), 'diff page should render changed line');
+}
+
+function smokeRepoHotfixConfirmPath() {
+  if (!gitAvailable()) {
+    console.log('smoke repo hotfix skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-hotfix-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
+  commitAll(repoPath, 'seed hotfix');
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\nconst next = 2;\n');
+  fs.writeFileSync(path.join(repoPath, 'new.js'), 'export const created = true;\n');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Hotfix Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp(['1', '1', 'h', 'c', '', 'b', 'b', 'q'].join('\n') + '\n', home);
+  const log = spawnSync('git', ['log', '-1', '--format=%s%n%b'], {
+    cwd: repoPath,
+    encoding: 'utf8'
+  });
+  const status = spawnSync('git', ['status', '--porcelain'], {
+    cwd: repoPath,
+    encoding: 'utf8'
+  });
+
+  assert(result.status === 0, result.stderr || 'repo hotfix confirm path failed');
+  assert(result.stdout.includes('Confirm Commit'), 'hotfix path should render confirmation page');
+  assert(result.stdout.includes('Title: hotfix(main): 2 file(s)'), 'hotfix path should render generated title');
+  assert(result.stdout.includes('Body: Auto hotfix commit'), 'hotfix path should render default body');
+  assert(result.stdout.includes('Commit created.'), 'hotfix path should create commit after confirmation');
+  assert(log.stdout.includes('hotfix(main): 2 file(s)'), 'hotfix commit subject mismatch');
+  assert(log.stdout.includes('Auto hotfix commit'), 'hotfix commit body mismatch');
+  assert(status.stdout.trim() === '', 'hotfix commit should include all tracked and untracked changes');
+}
+
 function countOccurrences(text, value) {
   return text.split(value).length - 1;
 }
@@ -622,5 +695,7 @@ smokeProjectItemsPath();
 smokeScannerMissingProjectPath();
 smokeDuplicateValidation();
 smokeTableFormatting();
+smokeRepoPageOpenAndDiffPath();
+smokeRepoHotfixConfirmPath();
 
 console.log('smoke ok');
