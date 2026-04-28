@@ -1,4 +1,4 @@
-import { promptAction } from '../utils/input.js';
+import { promptAction, promptLine } from '../utils/input.js';
 import { formatShortcut } from '../utils/format.js';
 import { formatTable } from '../utils/table.js';
 import { formatActionColumns } from '../utils/menu.js';
@@ -100,57 +100,196 @@ export class ProjectsPage {
       }) ?? null;
 
     if (selectedProject) {
-      console.clear();
-      console.log(color.bold('Project: ' + selectedProject.name));
-      console.log('');
-
-      if (selectedProject.warning) {
-        console.log(color.yellow(selectedProject.warning));
-      } else if (selectedProject.repos.length === 0) {
-        console.log(color.dim('No Git repositories found.'));
-      } else {
-        const rows = [
-          ['', color.bold('Repo'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit')]
-        ];
-
-        selectedProject.repos.forEach((repo, index) => {
-          const prefix = repo.net >= 0 ? '+' : '';
-          const net = prefix + String(repo.net);
-
-          rows.push([
-            String(index + 1) + '.',
-            repo.name,
-            color.green('+' + String(repo.added)) + ' / ' + color.red('-' + String(repo.removed)),
-            repo.net < 0 ? color.red(net) : color.green(net),
-            repo.warning ? color.yellow('warning') : this.formatModifiedFiles(repo.modifiedFiles),
-            repo.lastCommitAgo ?? 'N/A'
-          ]);
-        });
-
-        const formattedRows = formatTable(rows);
-        console.log(formattedRows[0]);
-        console.log('');
-        formattedRows.slice(1).forEach((row) => console.log(row));
-      }
-
-      console.log('');
-      formatActionColumns([
-        color.bold('B.') + ' Back',
-        color.bold('Q.') + ' Quit'
-      ]).forEach((row) => console.log(row));
-      console.log('');
-
-      const selectedAnswer = await promptAction('Action: ');
-
-      if (selectedAnswer.trim().toLowerCase() === 'q') {
-        return;
-      }
-
-      await this.router.replace('projects');
+      await this.showProject(selectedProject.name);
       return;
     }
 
     await this.router.replace('projects');
+  }
+
+  async showProject(projectName) {
+    const color = this.runtime.color;
+    const snapshot = this.runtime.refreshSnapshot();
+    const project = snapshot.projects.find((candidate) => candidate.name === projectName) ?? null;
+    const hideReposWithoutLineChanges = this.runtime.projectsPageHideReposWithoutLineChanges === true;
+
+    console.clear();
+
+    if (!project) {
+      console.log(color.bold('Project not found.'));
+      console.log('');
+      await promptLine('Press Enter to continue.');
+      await this.router.replace('projects');
+      return;
+    }
+
+    console.log(color.bold('Project: ' + project.name));
+    console.log('');
+
+    const repos = hideReposWithoutLineChanges ? project.repos.filter((repo) => {
+      return this.shouldShowRepoWhenLineChangesHidden(repo);
+    }) : project.repos;
+
+    if (project.warning) {
+      console.log(color.yellow(project.warning));
+    } else if (project.repos.length === 0) {
+      console.log(color.dim('No Git repositories found.'));
+    } else if (repos.length === 0) {
+      console.log(color.dim('No repos with line changes.'));
+    } else {
+      const rows = [
+        ['', color.bold('Repo'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit')]
+      ];
+
+      repos.forEach((repo, index) => {
+        const prefix = repo.net >= 0 ? '+' : '';
+        const net = prefix + String(repo.net);
+
+        rows.push([
+          String(index + 1) + '.',
+          repo.name,
+          color.green('+' + String(repo.added)) + ' / ' + color.red('-' + String(repo.removed)),
+          repo.net < 0 ? color.red(net) : color.green(net),
+          repo.warning ? color.yellow('warning') : this.formatModifiedFiles(repo.modifiedFiles),
+          repo.lastCommitAgo ?? 'N/A'
+        ]);
+      });
+
+      const formattedRows = formatTable(rows);
+      console.log(formattedRows[0]);
+      console.log('');
+      formattedRows.slice(1).forEach((row) => console.log(row));
+    }
+
+    console.log('');
+    formatActionColumns([
+      color.bold('T.') + ' ' + (hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes'),
+      color.bold('R.') + ' Refresh',
+      color.bold('E.') + ' Edit project',
+      color.bold('D.') + ' Delete project',
+      color.bold('B.') + ' Back',
+      color.bold('Q.') + ' Quit'
+    ]).forEach((row) => console.log(row));
+    console.log('');
+
+    const answer = await promptAction('Action: ');
+    const key = answer.trim().toLowerCase();
+
+    if (key === 't') {
+      this.runtime.projectsPageHideReposWithoutLineChanges = !hideReposWithoutLineChanges;
+      await this.showProject(project.name);
+      return;
+    }
+
+    if (key === 'r') {
+      await this.showProject(project.name);
+      return;
+    }
+
+    if (key === 'e') {
+      await this.editProject(project);
+      return;
+    }
+
+    if (key === 'd') {
+      await this.deleteProject(project);
+      return;
+    }
+
+    if (key === 'q') {
+      return;
+    }
+
+    await this.router.replace('projects');
+  }
+
+  async editProject(project) {
+    const color = this.runtime.color;
+
+    console.clear();
+    console.log(color.bold('Edit Project: ' + project.name));
+    console.log('');
+    console.log(color.dim('Leave a value blank to keep the current value.'));
+    console.log(color.dim('Type "q" to cancel.'));
+    console.log('');
+
+    const name = await promptLine('Name [' + project.name + ']: ');
+
+    if (name.trim().toLowerCase() === 'q') {
+      await this.showProject(project.name);
+      return;
+    }
+
+    const projectPath = await promptLine('Path [' + project.path + ']: ');
+
+    if (projectPath.trim().toLowerCase() === 'q') {
+      await this.showProject(project.name);
+      return;
+    }
+
+    const currentShortcut = project.shortcut ?? '';
+    const shortcut = await promptLine('Shortcut [' + formatShortcut(project.shortcut) + ']: ');
+
+    if (shortcut.trim().toLowerCase() === 'q') {
+      await this.showProject(project.name);
+      return;
+    }
+
+    const result = this.runtime.projectManager.updateProject(project.name, {
+      name: name.trim() || project.name,
+      path: projectPath.trim() || project.path,
+      shortcut: shortcut.trim() || currentShortcut
+    });
+
+    console.log('');
+
+    if (!result.ok) {
+      console.log(color.yellow(result.error));
+      await promptLine('Press Enter to continue.');
+      await this.showProject(project.name);
+      return;
+    }
+
+    console.log(color.green('Project updated.'));
+    await promptLine('Press Enter to continue.');
+    await this.showProject(result.project.name);
+  }
+
+  async deleteProject(project) {
+    const color = this.runtime.color;
+
+    console.clear();
+    console.log(color.bold('Delete Project: ' + project.name + '?'));
+    console.log('');
+    console.log('This will remove it from Repoteer only.');
+    console.log('No files will be deleted.');
+    console.log('');
+
+    const answer = await promptLine('Type "yes" to confirm: ');
+
+    if (answer.trim().toLowerCase() !== 'yes') {
+      await this.showProject(project.name);
+      return;
+    }
+
+    const result = this.runtime.projectManager.deleteProject(project.name);
+
+    console.log('');
+
+    if (!result.ok) {
+      console.log(color.yellow(result.error));
+      await promptLine('Press Enter to continue.');
+      await this.router.replace('projects');
+      return;
+    }
+
+    console.log(color.green('Project deleted.'));
+    await promptLine('Press Enter to continue.');
+    await this.router.replace('projects');
+  }
+
+  shouldShowRepoWhenLineChangesHidden(repo) {
+    return Boolean(repo.warning) || repo.added !== 0 || repo.removed !== 0;
   }
 
   sortProjectsByName(projects) {

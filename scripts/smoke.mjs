@@ -280,7 +280,7 @@ function smokeProjectsPageHideCleanTogglePath() {
   assert(filteredProjectsScreen.includes('Warning Project'), 'filtered projects screen should keep warning project');
 }
 
-function smokeProjectsPageSortsByChangeVolumePath() {
+function smokeProjectsPageSortsAlphabeticallyPath() {
   if (!gitAvailable()) {
     console.log('smoke projects page sort skipped: git unavailable');
     return;
@@ -337,6 +337,101 @@ function smokeProjectsPageNumberSelectionPath() {
   assert(result.status === 0, result.stderr || 'projects page number selection path failed');
   assert(result.stdout.includes('Project: Select Project'), 'number selection should open selected project view');
   assert(result.stdout.includes('No Git repositories found.'), 'selected project view should render empty repo state');
+}
+
+
+function smokeProjectPageHideReposWithoutLineChangesPath() {
+  if (!gitAvailable()) {
+    console.log('smoke project page hide repos skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-project-repos-toggle-'));
+  const dirtyRepoPath = path.join(projectPath, 'dirty-repo');
+  const cleanRepoPath = path.join(projectPath, 'clean-repo');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(cleanRepoPath);
+  initGitRepo(dirtyRepoPath);
+
+  fs.writeFileSync(path.join(cleanRepoPath, 'file.txt'), 'one\n');
+  commitAll(cleanRepoPath, 'seed clean');
+
+  fs.writeFileSync(path.join(dirtyRepoPath, 'file.txt'), 'one\n');
+  commitAll(dirtyRepoPath, 'seed dirty');
+  fs.writeFileSync(path.join(dirtyRepoPath, 'file.txt'), 'one\ntwo\n');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Repo Toggle Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp('1\nt\nq\n', home);
+
+  assert(result.status === 0, result.stderr || 'project page repo toggle path failed');
+  assert(result.stdout.includes('T. Hide repos without line changes'), 'project page did not render hide repos toggle action');
+  assert(result.stdout.includes('T. Show all repos'), 'project page did not render show all repos toggle action');
+
+  const screens = result.stdout.split('Action: ');
+  assert(screens.length >= 4, 'project repo toggle path should render three prompts');
+
+  const allReposScreen = screens[1];
+  const filteredReposScreen = screens[2];
+
+  assert(allReposScreen.includes('clean-repo'), 'project page should initially show clean repo');
+  assert(allReposScreen.includes('dirty-repo'), 'project page should initially show dirty repo');
+  assert(!filteredReposScreen.includes('clean-repo'), 'project page should hide clean repo after toggle');
+  assert(filteredReposScreen.includes('dirty-repo'), 'project page should keep dirty repo after toggle');
+}
+
+
+function smokeProjectPageEditProjectPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const originalProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-edit-original-'));
+  const renamedProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-edit-renamed-'));
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Edit Project', path: originalProjectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const input = ['1', 'e', 'Renamed Project', renamedProjectPath, 'z', '', 'q'].join('\n') + '\n';
+  const result = runApp(input, home);
+
+  assert(result.status === 0, result.stderr || 'project page edit path failed');
+  assert(result.stdout.includes('Edit Project: Edit Project'), 'edit path did not render edit page');
+  assert(result.stdout.includes('Project updated.'), 'edit path did not confirm project update');
+  assert(result.stdout.includes('Project: Renamed Project'), 'edit path did not reopen renamed project');
+
+  const projects = readProjects(home);
+  assert(projects.length === 1, 'edit path should keep one project');
+  assert(projects[0].name === 'Renamed Project', 'edit path project name mismatch');
+  assert(projects[0].path === renamedProjectPath, 'edit path project path mismatch');
+  assert(projects[0].shortcut === 'z', 'edit path project shortcut mismatch');
+}
+
+
+function smokeProjectPageDeleteProjectPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-delete-project-'));
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Delete Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const input = ['1', 'd', 'yes', '', 'q'].join('\n') + '\n';
+  const result = runApp(input, home);
+
+  assert(result.status === 0, result.stderr || 'project page delete path failed');
+  assert(result.stdout.includes('Delete Project: Delete Project?'), 'delete path did not render confirmation');
+  assert(result.stdout.includes('This will remove it from Repoteer only.'), 'delete path did not explain Repoteer-only delete');
+  assert(result.stdout.includes('No files will be deleted.'), 'delete path did not explain filesystem safety');
+  assert(result.stdout.includes('Project deleted.'), 'delete path did not confirm project deletion');
+  assert(readProjects(home).length === 0, 'delete path should remove project from storage');
 }
 
 
@@ -425,8 +520,11 @@ smokeAddProjectPath();
 smokeAddProjectCancelPath();
 smokeGitRepoDiscovery();
 smokeProjectsPageHideCleanTogglePath();
-smokeProjectsPageSortsByChangeVolumePath();
+smokeProjectsPageSortsAlphabeticallyPath();
 smokeProjectsPageNumberSelectionPath();
+smokeProjectPageHideReposWithoutLineChangesPath();
+smokeProjectPageEditProjectPath();
+smokeProjectPageDeleteProjectPath();
 smokeScannerMissingProjectPath();
 smokeDuplicateValidation();
 smokeTableFormatting();
