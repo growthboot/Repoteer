@@ -280,6 +280,66 @@ function smokeProjectsPageHideCleanTogglePath() {
   assert(filteredProjectsScreen.includes('Warning Project'), 'filtered projects screen should keep warning project');
 }
 
+function smokeProjectsPageSortsByChangeVolumePath() {
+  if (!gitAvailable()) {
+    console.log('smoke projects page sort skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const alphaProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-alpha-project-'));
+  const zebraProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-zebra-project-'));
+  const alphaRepoPath = path.join(alphaProjectPath, 'repo');
+  const zebraRepoPath = path.join(zebraProjectPath, 'repo');
+
+  initGitRepo(alphaRepoPath);
+  initGitRepo(zebraRepoPath);
+
+  fs.writeFileSync(path.join(alphaRepoPath, 'file.txt'), 'one\n');
+  commitAll(alphaRepoPath, 'seed alpha');
+  fs.writeFileSync(path.join(alphaRepoPath, 'file.txt'), 'one\ntwo\n');
+
+  fs.writeFileSync(path.join(zebraRepoPath, 'file.txt'), 'one\n');
+  commitAll(zebraRepoPath, 'seed zebra');
+  fs.writeFileSync(path.join(zebraRepoPath, 'file.txt'), 'one\ntwo\nthree\nfour\n');
+
+  const storageDir = path.join(home, '.repoteer', 'storage');
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Zebra Project', path: zebraProjectPath, shortcut: null },
+    { name: 'Alpha Project', path: alphaProjectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp('q\n', home);
+
+  assert(result.status === 0, result.stderr || 'projects page sort path failed');
+
+  const alphaIndex = result.stdout.indexOf('Alpha Project');
+  const zebraIndex = result.stdout.indexOf('Zebra Project');
+
+  assert(alphaIndex !== -1, 'projects page sort path did not render alpha project');
+  assert(zebraIndex !== -1, 'projects page sort path did not render zebra project');
+  assert(alphaIndex < zebraIndex, 'projects page should sort projects alphabetically by name');
+}
+
+function smokeProjectsPageNumberSelectionPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-select-project-'));
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Select Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp('1\nq\n', home);
+
+  assert(result.status === 0, result.stderr || 'projects page number selection path failed');
+  assert(result.stdout.includes('Project: Select Project'), 'number selection should open selected project view');
+  assert(result.stdout.includes('No Git repositories found.'), 'selected project view should render empty repo state');
+}
+
+
 function smokeScannerMissingProjectPath() {
   const git = new Git();
   const scanner = new Scanner(git);
@@ -365,6 +425,8 @@ smokeAddProjectPath();
 smokeAddProjectCancelPath();
 smokeGitRepoDiscovery();
 smokeProjectsPageHideCleanTogglePath();
+smokeProjectsPageSortsByChangeVolumePath();
+smokeProjectsPageNumberSelectionPath();
 smokeScannerMissingProjectPath();
 smokeDuplicateValidation();
 smokeTableFormatting();

@@ -18,9 +18,10 @@ export class ProjectsPage {
 
     const snapshot = this.runtime.refreshSnapshot();
     const hideCleanProjects = this.runtime.projectsPageHideClean === true;
-    const projects = hideCleanProjects ? snapshot.projects.filter((project) => {
+    const orderedProjects = this.sortProjectsByName(snapshot.projects);
+    const projects = hideCleanProjects ? orderedProjects.filter((project) => {
       return this.shouldShowProjectWhenCleanHidden(project);
-    }) : snapshot.projects;
+    }) : orderedProjects;
 
     if (projects.length === 0) {
       const message = snapshot.projects.length === 0 ? 'No projects added.' : 'No projects with code changes.';
@@ -92,7 +93,70 @@ export class ProjectsPage {
       return;
     }
 
+    const selectedProject = /^\d+$/.test(key)
+      ? projects[Number(key) - 1] ?? null
+      : projects.find((project) => {
+        return project.shortcut && project.shortcut.toLowerCase() === key;
+      }) ?? null;
+
+    if (selectedProject) {
+      console.clear();
+      console.log(color.bold('Project: ' + selectedProject.name));
+      console.log('');
+
+      if (selectedProject.warning) {
+        console.log(color.yellow(selectedProject.warning));
+      } else if (selectedProject.repos.length === 0) {
+        console.log(color.dim('No Git repositories found.'));
+      } else {
+        const rows = [
+          ['', color.bold('Repo'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit')]
+        ];
+
+        selectedProject.repos.forEach((repo, index) => {
+          const prefix = repo.net >= 0 ? '+' : '';
+          const net = prefix + String(repo.net);
+
+          rows.push([
+            String(index + 1) + '.',
+            repo.name,
+            color.green('+' + String(repo.added)) + ' / ' + color.red('-' + String(repo.removed)),
+            repo.net < 0 ? color.red(net) : color.green(net),
+            repo.warning ? color.yellow('warning') : this.formatModifiedFiles(repo.modifiedFiles),
+            repo.lastCommitAgo ?? 'N/A'
+          ]);
+        });
+
+        const formattedRows = formatTable(rows);
+        console.log(formattedRows[0]);
+        console.log('');
+        formattedRows.slice(1).forEach((row) => console.log(row));
+      }
+
+      console.log('');
+      formatActionColumns([
+        color.bold('B.') + ' Back',
+        color.bold('Q.') + ' Quit'
+      ]).forEach((row) => console.log(row));
+      console.log('');
+
+      const selectedAnswer = await promptAction('Action: ');
+
+      if (selectedAnswer.trim().toLowerCase() === 'q') {
+        return;
+      }
+
+      await this.router.replace('projects');
+      return;
+    }
+
     await this.router.replace('projects');
+  }
+
+  sortProjectsByName(projects) {
+    return [...projects].sort((a, b) => {
+      return a.name.localeCompare(b.name);
+    });
   }
 
   shouldShowProjectWhenCleanHidden(project) {
@@ -128,6 +192,10 @@ export class ProjectsPage {
 
   formatLastCommit(project) {
     return project.totals?.lastCommitAgo ?? 'N/A';
+  }
+
+  formatModifiedFiles(count) {
+    return String(count) + ' ' + (count === 1 ? 'file' : 'files');
   }
 
   formatRepoCount(count) {
