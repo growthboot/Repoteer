@@ -5,12 +5,12 @@ export function createColor(options = {}) {
 
   return {
     enabled,
-    bold: (value) => wrap(value, '1', '22', enabled),
+    bold: (value) => String(value ?? ''),
     dim: (value) => wrap(value, '2', '22', enabled),
     green: (value) => wrap(value, '32', '39', enabled),
     red: (value) => wrap(value, '31', '39', enabled),
     yellow: (value) => wrap(value, '33', '39', enabled),
-    darkYellow: (value) => wrap(value, '2;33', '22;39', enabled)
+    darkYellow: (value) => wrap(value, '33', '39', enabled)
   };
 }
 

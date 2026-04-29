@@ -19,7 +19,7 @@ export class ProjectsPage {
 
     const snapshot = this.runtime.refreshSnapshot();
     const hideCleanProjects = this.runtime.projectsPageHideClean === true;
-    const orderedProjects = this.sortProjectsByName(snapshot.projects);
+    const orderedProjects = this.orderProjects(snapshot.projects);
     const projects = hideCleanProjects ? orderedProjects.filter((project) => {
       return this.shouldShowProjectWhenCleanHidden(project);
     }) : orderedProjects;
@@ -28,40 +28,19 @@ export class ProjectsPage {
       const message = snapshot.projects.length === 0 ? 'No projects added.' : 'No projects with code changes.';
       console.log(color.dim(message));
     } else {
-      const rows = [
-        ['', color.bold('Project'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit'), color.bold('shortcut')]
-      ];
-
-      projects.forEach((project, index) => {
-        const label = String(index + 1) + '.';
-        const shortcut = color.dim(formatShortcut(project.shortcut));
-        const changes = this.formatChanges(project);
-        const net = this.formatNet(project);
-        const modified = project.warning ? color.yellow('warning') : this.formatRepoCount(project.repos.length);
-        const lastCommit = this.formatLastCommit(project);
-
-        rows.push([label, project.name, changes, net, modified, lastCommit, shortcut]);
-      });
-
-      const formattedRows = formatTable(rows);
-      console.log(formattedRows[0]);
-      console.log('');
-      formattedRows.slice(1).forEach((row) => console.log(row));
-
-      projects.forEach((project) => {
-        if (project.warning) {
-          console.log('    ' + color.yellow(project.warning));
-        }
-      });
+      this.renderProjectGroups(projects);
     }
 
     console.log('');
     formatActionColumns([
-      color.bold('T.') + ' ' + (hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes'),
-      color.bold('R.') + ' Refresh',
-      color.bold('A.') + ' Add project',
-      color.bold('S.') + ' Settings',
-      color.bold('Q.') + ' Quit'
+      'T. ' + (hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes'),
+      'R. Refresh',
+      'A. Add project',
+      'V. View archive',
+      '[0-9]P. Pin/unpin project',
+      '[0-9]A. Archive project',
+      'S. Settings',
+      'Q. Quit'
     ]).forEach((row) => console.log(row));
     console.log('');
 
@@ -71,6 +50,11 @@ export class ProjectsPage {
 
     if (key === 'a') {
       await this.router.open('addProject');
+      return;
+    }
+
+    if (key === 'v') {
+      await this.router.open('archive');
       return;
     }
 
@@ -91,6 +75,32 @@ export class ProjectsPage {
     }
 
     if (key === 'q') {
+      return;
+    }
+
+    const pinMatch = key.match(/^(\d+)p$/);
+
+    if (pinMatch) {
+      const project = projects[Number(pinMatch[1]) - 1] ?? null;
+
+      if (project) {
+        this.runtime.projectManager.setProjectPinned(project.name, project.pinned !== true);
+      }
+
+      await this.router.replace('projects');
+      return;
+    }
+
+    const archiveMatch = key.match(/^(\d+)a$/);
+
+    if (archiveMatch) {
+      const project = projects[Number(archiveMatch[1]) - 1] ?? null;
+
+      if (project) {
+        this.runtime.projectManager.archiveProject(project.name);
+      }
+
+      await this.router.replace('projects');
       return;
     }
 
@@ -308,10 +318,76 @@ export class ProjectsPage {
     return Boolean(repo.warning) || repo.added !== 0 || repo.removed !== 0;
   }
 
-  sortProjectsByName(projects) {
-    return [...projects].sort((a, b) => {
-      return a.name.localeCompare(b.name);
+  orderProjects(projects) {
+    const pinnedProjects = projects
+      .filter((project) => project.pinned === true)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const unpinnedProjects = projects
+      .filter((project) => project.pinned !== true)
+      .sort((a, b) => {
+        const volumeDifference = this.getChangeVolume(b) - this.getChangeVolume(a);
+
+        if (volumeDifference !== 0) {
+          return volumeDifference;
+        }
+
+        return a.name.localeCompare(b.name);
+      });
+
+    return [...pinnedProjects, ...unpinnedProjects];
+  }
+
+  renderProjectGroups(projects) {
+    const pinnedProjects = projects.filter((project) => project.pinned === true);
+    const unpinnedProjects = projects.filter((project) => project.pinned !== true);
+
+    if (pinnedProjects.length > 0) {
+      console.log(this.runtime.color.bold('Pinned Projects'));
+      this.renderProjectRows(projects, pinnedProjects);
+      console.log('');
+    }
+
+    if (unpinnedProjects.length > 0) {
+      console.log(this.runtime.color.bold('Projects'));
+      this.renderProjectRows(projects, unpinnedProjects);
+    }
+
+    projects.forEach((project) => {
+      if (project.warning) {
+        console.log('    ' + this.runtime.color.yellow(project.warning));
+      }
     });
+  }
+
+  renderProjectRows(projects, rowsProjects) {
+    const color = this.runtime.color;
+    const rows = [
+      ['', color.bold('Project'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit'), color.bold('shortcut')]
+    ];
+
+    rowsProjects.forEach((project) => {
+      const label = String(projects.indexOf(project) + 1) + '.';
+      const shortcut = color.dim(formatShortcut(project.shortcut));
+      const changes = this.formatChanges(project);
+      const net = this.formatNet(project);
+      const modified = project.warning ? color.yellow('warning') : this.formatRepoCount(project.repos.length);
+      const lastCommit = this.formatLastCommit(project);
+
+      rows.push([label, project.name, changes, net, modified, lastCommit, shortcut]);
+    });
+
+    const formattedRows = formatTable(rows);
+    console.log(formattedRows[0]);
+    console.log('');
+    formattedRows.slice(1).forEach((row) => console.log(row));
+  }
+
+  getChangeVolume(project) {
+    if (!project.totals) {
+      return 0;
+    }
+
+    return Math.abs(project.totals.added) + Math.abs(project.totals.removed);
   }
 
   shouldShowProjectWhenCleanHidden(project) {

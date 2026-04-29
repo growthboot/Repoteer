@@ -772,6 +772,8 @@ function smokeAddProjectPath() {
   assert(projects[0].name === 'Smoke Project', 'saved project name mismatch');
   assert(projects[0].path === projectPath, 'saved project path mismatch');
   assert(projects[0].shortcut === 'z', 'saved project shortcut mismatch');
+  assert(projects[0].pinned === false, 'saved project should default to unpinned');
+  assert(projects[0].archived === false, 'saved project should default to unarchived');
 }
 
 function smokeAddProjectCancelPath() {
@@ -886,7 +888,7 @@ function smokeProjectsPageHideCleanTogglePath() {
   assert(filteredProjectsScreen.includes('Warning Project'), 'filtered projects screen should keep warning project');
 }
 
-function smokeProjectsPageSortsAlphabeticallyPath() {
+function smokeProjectsPageSortsByChangeVolumePath() {
   if (!gitAvailable()) {
     console.log('smoke projects page sort skipped: git unavailable');
     return;
@@ -912,8 +914,8 @@ function smokeProjectsPageSortsAlphabeticallyPath() {
   const storageDir = path.join(home, '.repoteer', 'storage');
   fs.mkdirSync(storageDir, { recursive: true });
   fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
-    { name: 'Zebra Project', path: zebraProjectPath, shortcut: null },
-    { name: 'Alpha Project', path: alphaProjectPath, shortcut: null }
+    { name: 'Alpha Project', path: alphaProjectPath, shortcut: null },
+    { name: 'Zebra Project', path: zebraProjectPath, shortcut: null }
   ], null, 2) + '\n');
 
   const result = runApp('q\n', home);
@@ -925,7 +927,74 @@ function smokeProjectsPageSortsAlphabeticallyPath() {
 
   assert(alphaIndex !== -1, 'projects page sort path did not render alpha project');
   assert(zebraIndex !== -1, 'projects page sort path did not render zebra project');
-  assert(alphaIndex < zebraIndex, 'projects page should sort projects alphabetically by name');
+  assert(zebraIndex < alphaIndex, 'unpinned projects should sort by change volume descending');
+}
+
+function smokeProjectsPagePinPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const alphaProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-alpha-project-'));
+  const zebraProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-zebra-project-'));
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Zebra Project', path: zebraProjectPath, shortcut: null },
+    { name: 'Alpha Project', path: alphaProjectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp('1p\nq\n', home);
+
+  assert(result.status === 0, result.stderr || 'projects page pin path failed');
+  assert(result.stdout.includes('Pinned Projects'), 'pin path should render pinned group');
+  assert(result.stdout.includes('Projects'), 'pin path should render normal group');
+  assert(result.stdout.includes('[0-9]P.'), 'pin path should render visible pin action');
+  assert(result.stdout.includes('[0-9]A.'), 'pin path should render visible archive action');
+  assert(/^1\.\s+Alpha Project/m.test(result.stdout), 'pinned project should keep shared number sequence at top');
+  assert(/^2\.\s+Zebra Project/m.test(result.stdout), 'unpinned project should keep shared number sequence after pinned group');
+
+  const projects = readProjects(home);
+  assert(projects.find((project) => project.name === 'Alpha Project').pinned === true, 'pin path should persist pinned project');
+  assert(projects.find((project) => project.name === 'Zebra Project').pinned !== true, 'pin path should not pin other projects');
+}
+
+function smokeProjectsPageArchivePath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const activeProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-active-project-'));
+  const archiveProjectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-archive-project-'));
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Active Project', path: activeProjectPath, shortcut: null },
+    { name: 'Archive Project', path: archiveProjectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const archiveResult = runApp('2a\nv\n1u\nb\nq\n', home);
+
+  assert(archiveResult.status === 0, archiveResult.stderr || 'projects page archive path failed');
+
+  const screens = archiveResult.stdout.split('Action: ');
+  assert(screens.length >= 4, 'archive path should render multiple screens');
+  assert(screens[2].includes('Archived Projects'), 'archive view should render archived project title');
+  assert(screens[2].includes('Archive Project'), 'archive view should show archived project');
+  assert(screens[2].includes('[0-9]U.'), 'archive view should render visible unarchive action');
+  assert(screens[2].includes('[0-9]D.'), 'archive view should render visible delete action');
+  assert(!screens[2].includes('Active Project'), 'archive view should not show active project');
+  assert(screens[3].includes('No archived projects.'), 'unarchive path should remove project from archive view');
+
+  const projectsAfterUnarchive = readProjects(home);
+  assert(projectsAfterUnarchive.every((project) => project.archived !== true), 'unarchive path should clear archived flag');
+
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Archived Delete Project', path: archiveProjectPath, shortcut: null, archived: true }
+  ], null, 2) + '\n');
+
+  const deleteResult = runApp('v\n1d\nyes\n\nb\nq\n', home);
+
+  assert(deleteResult.status === 0, deleteResult.stderr || 'archive delete path failed');
+  assert(deleteResult.stdout.includes('Delete Project: Archived Delete Project?'), 'archive delete path should render confirmation');
+  assert(deleteResult.stdout.includes('Project deleted.'), 'archive delete path should confirm deletion');
+  assert(readProjects(home).length === 0, 'archive delete path should remove project from storage');
 }
 
 function smokeProjectsPageNumberSelectionPath() {
@@ -1184,15 +1253,21 @@ function smokeTableFormatting() {
     '\u001b[1mT.\u001b[22m Hide projects without code changes',
     '\u001b[1mR.\u001b[22m Refresh',
     '\u001b[1mA.\u001b[22m Add project',
+    '\u001b[1mV.\u001b[22m View archive',
+    '\u001b[1m[0-9]P.\u001b[22m Pin/unpin project',
+    '\u001b[1m[0-9]A.\u001b[22m Archive project',
     '\u001b[1mS.\u001b[22m Settings',
     '\u001b[1mQ.\u001b[22m Quit'
   ]);
 
-  assert(actionRows.length === 3, 'action columns should pair actions across rows');
+  assert(actionRows.length === 4, 'action columns should pair actions across rows');
   assert(stripAnsi(actionRows[0]).includes('R. Refresh'), 'action columns should render first right action');
-  assert(stripAnsi(actionRows[1]).includes('S. Settings'), 'action columns should render second right action');
-  assert(stripAnsi(actionRows[2]) === 'Q. Quit', 'action columns should render odd trailing action alone');
-  assert(stripAnsi(actionRows[0]).indexOf('R. Refresh') === stripAnsi(actionRows[1]).indexOf('S. Settings'), 'action columns should align right column');
+  assert(stripAnsi(actionRows[1]).includes('V. View archive'), 'action columns should render second right action');
+  assert(stripAnsi(actionRows[2]).includes('[0-9]A. Archive project'), 'action columns should render numeric archive action');
+  assert(stripAnsi(actionRows[3]).includes('Q. Quit'), 'action columns should render final right action');
+  assert(stripAnsi(actionRows[0]).indexOf('R. Refresh') === stripAnsi(actionRows[1]).indexOf('V. View archive'), 'action columns should align right column');
+  assert(stripAnsi(actionRows[1]).indexOf('V. View archive') === stripAnsi(actionRows[2]).indexOf('[0-9]A. Archive project'), 'action columns should align right column');
+  assert(stripAnsi(actionRows[2]).indexOf('[0-9]A. Archive project') === stripAnsi(actionRows[3]).indexOf('Q. Quit'), 'action columns should align right column');
 }
 
 function smokeBranchFormatting() {
@@ -1599,7 +1674,9 @@ smokeAddProjectPath();
 smokeAddProjectCancelPath();
 smokeGitRepoDiscovery();
 smokeProjectsPageHideCleanTogglePath();
-smokeProjectsPageSortsAlphabeticallyPath();
+smokeProjectsPageSortsByChangeVolumePath();
+smokeProjectsPagePinPath();
+smokeProjectsPageArchivePath();
 smokeProjectsPageNumberSelectionPath();
 smokeProjectPageHideReposWithoutLineChangesPath();
 smokeProjectPageEditProjectPath();

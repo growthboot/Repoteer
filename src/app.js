@@ -1,5 +1,6 @@
 import { Router } from './router/Router.js';
 import { ProjectsPage } from './pages/ProjectsPage.js';
+import { ArchivePage } from './pages/ArchivePage.js';
 import { AddProjectPage } from './pages/AddProjectPage.js';
 import { ProjectPage } from './pages/ProjectPage.js';
 import { RepoPage } from './pages/RepoPage.js';
@@ -86,7 +87,7 @@ export async function main(argv = process.argv.slice(2)) {
     projectsPageHideClean: false,
     snapshot: { projects: [] },
     refreshSnapshot() {
-      this.snapshot = this.scanner.scanProjects(this.projectManager.listProjects());
+      this.snapshot = this.scanner.scanProjects(this.projectManager.listActiveProjects());
       return this.snapshot;
     },
     refreshColor() {
@@ -104,6 +105,7 @@ export async function main(argv = process.argv.slice(2)) {
 
     const router = new Router(runtime, {
       projects: ProjectsPage,
+      archive: ArchivePage,
       addProject: AddProjectPage,
       project: ProjectPage,
       repo: RepoPage,
