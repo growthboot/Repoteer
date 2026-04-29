@@ -6,6 +6,8 @@ import { formatDiffForDisplay } from '../utils/diff.js';
 const MAX_VISIBLE_DIFF_CHARS = 12000;
 
 export class FilePage {
+  static scrollMode = 'normal';
+
   constructor({ runtime, router, params }) {
     this.runtime = runtime;
     this.router = router;

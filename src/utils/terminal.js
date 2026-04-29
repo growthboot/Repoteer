@@ -10,9 +10,9 @@ export function createTerminalSession(options = {}) {
       }
 
       this.installClearScreen();
-      this.clearScreen();
       process.stdout.write('\u001b[?1049h');
       active = true;
+      this.clearScreen();
     },
 
     exitAlternateScreen() {

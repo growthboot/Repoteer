@@ -13,6 +13,19 @@ export const AI_TOOL_DEFINITIONS = [
     outputMode: 'review'
   },
   {
+    id: 'commit_message',
+    title: 'Commit message',
+    description: 'Generate a commit title and summary from the prepared diff.',
+    systemPromptId: 'commit_message.system',
+    prePromptId: 'commit_message.pre',
+    payloadBuilderId: 'git_diff',
+    internalMessages: [
+      'Return only a commit title and summary for a human to review.',
+      'Do not tell the user to stage, commit, push, or modify files.'
+    ],
+    outputMode: 'commit_message'
+  },
+  {
     id: 'diff_summary',
     title: 'Diff summary',
     description: 'Summarize the prepared diff for quick human review.',

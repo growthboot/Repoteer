@@ -112,6 +112,11 @@ export class CommitConfirmPage {
     }
 
     await promptLine('Press Enter to continue.');
+    if (this.params.returnPage) {
+      await this.router.backTo(this.params.returnPage, this.params.returnParams ?? null);
+      return;
+    }
+
     await this.router.back();
   }
 

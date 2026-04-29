@@ -125,8 +125,7 @@ export class RepoPage {
     }
 
     if (key === 'm') {
-      const payload = this.runtime.commitManager.createDefaultPayload(repo);
-      await this.openCommitConfirm(project, repo, payload, false);
+      await this.openAiTool(project, repo, 'commit_message');
       return;
     }
 

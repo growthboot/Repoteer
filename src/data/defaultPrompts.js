@@ -10,6 +10,19 @@ export const DEFAULT_PROMPTS = {
     'Prioritize correctness, regressions, data loss, security risk, and missing manual checks.',
     'If there are no concrete findings, say that clearly and keep the response brief.'
   ].join('\n'),
+  'commit_message.system': [
+    'You write Git commit messages from a prepared diff.',
+    'Return exactly two lines in this format:',
+    'Title: <imperative commit title>',
+    'Summary: <one concise sentence explaining the change>',
+    'Do not include markdown, bullets, code fences, extra commentary, or additional sections.',
+    'The diff may be truncated. Do not invent unseen files, unshown hunks, or behavior outside the provided payload.'
+  ].join('\n'),
+  'commit_message.pre': [
+    'Create a commit title and summary for the following prepared diff.',
+    'The title should be short, specific, and imperative.',
+    'The summary should describe what changed and why at a high level.'
+  ].join('\n'),
   'diff_summary.system': [
     'You summarize Git diffs for a human navigating project changes.',
     'Return concise output with these sections: Summary, Notable files, Risk notes.',

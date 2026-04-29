@@ -138,6 +138,11 @@ export class AiProviderSelectPage {
 
     result.warnings.forEach((warning) => console.log(color.yellow(warning)));
 
+    if (this.isCommitMessageTool(params.toolId)) {
+      await this.promptForGeneratedCommitMessage(params);
+      return;
+    }
+
     await promptLine('Press Enter to continue.');
     await this.router.replace('aiProviderSelect', params);
   }
@@ -177,6 +182,17 @@ export class AiProviderSelectPage {
       return;
     }
 
+    if (this.isCommitMessageTool(params.toolId)) {
+      const opened = await this.openCommitConfirmFromGeneratedResponse(result.content, params);
+
+      if (!opened) {
+        await promptLine('Press Enter to continue.');
+        await this.router.replace('aiProviderSelect', params);
+      }
+
+      return;
+    }
+
     await this.router.open('aiResult', {
       toolId: this.params.toolId,
       providerTitle: provider.title,
@@ -186,6 +202,121 @@ export class AiProviderSelectPage {
       result: result.content,
       selectionParams: params
     });
+  }
+
+  async promptForGeneratedCommitMessage(params) {
+    const color = this.runtime.color;
+
+    while (true) {
+      console.log('');
+      console.log(color.bold('Read generated commit message'));
+      console.log('');
+      console.log(color.dim('Paste the copied prompt into the AI provider, generate a response, copy it, then continue here.'));
+      console.log('');
+      formatActionColumns([
+        color.bold('1.') + ' Read clipboard',
+        color.bold('2.') + ' Paste manually',
+        color.bold('B.') + ' Back'
+      ]).forEach((row) => console.log(row));
+      console.log('');
+
+      const answer = await promptAction('Action: ');
+      const key = answer.trim().toLowerCase();
+
+      if (key === 'b' || answer === '\u001b') {
+        await this.router.replace('aiProviderSelect', params);
+        return;
+      }
+
+      if (key === '1') {
+        const read = this.runtime.clipboard.read();
+
+        if (!read.ok) {
+          console.log('');
+          console.log(color.yellow(read.warning || 'Clipboard could not be read.'));
+          continue;
+        }
+
+        const opened = await this.openCommitConfirmFromGeneratedResponse(read.text, params);
+
+        if (opened) {
+          return;
+        }
+
+        continue;
+      }
+
+      if (key === '2') {
+        const response = await this.readManualGeneratedCommitMessage();
+        const opened = await this.openCommitConfirmFromGeneratedResponse(response, params);
+
+        if (opened) {
+          return;
+        }
+
+        continue;
+      }
+
+      console.log('');
+      console.log(color.yellow('Invalid selection: ' + answer));
+    }
+  }
+
+  async readManualGeneratedCommitMessage() {
+    const color = this.runtime.color;
+    const lines = [];
+
+    console.log('');
+    console.log(color.bold('Paste generated commit message'));
+    console.log(color.dim('Finish with a line containing only END.'));
+    console.log('');
+
+    while (true) {
+      const line = await promptLine('');
+
+      if (line.trim() === 'END') {
+        break;
+      }
+
+      lines.push(line);
+    }
+
+    return lines.join('\n');
+  }
+
+  async openCommitConfirmFromGeneratedResponse(response, params) {
+    const color = this.runtime.color;
+    const parsed = this.runtime.commitManager.parseGeneratedCommitResponse(response);
+
+    if (!parsed.ok) {
+      console.log('');
+      console.log(color.yellow(parsed.warning));
+      console.log(color.dim('Expected format:'));
+      console.log('Title: ...');
+      console.log('Summary: ...');
+      return false;
+    }
+
+    await this.router.open('commitConfirm', {
+      projectName: params.projectName,
+      repoPath: params.repoPath,
+      title: parsed.title,
+      body: parsed.body,
+      pushAfterCommit: false,
+      returnPage: 'repo',
+      returnParams: {
+        projectName: params.projectName,
+        repoPath: params.repoPath
+      }
+    });
+
+    return true;
+  }
+
+  isCommitMessageTool(toolId) {
+    const tool = this.runtime.aiPromptManager.getTool(toolId);
+
+    return tool?.outputMode === 'commit_message';
   }
 
   formatRepoLabel() {

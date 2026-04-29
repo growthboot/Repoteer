@@ -28,6 +28,33 @@ export class Router {
     await this.renderCurrent();
   }
 
+  async backTo(pageName, params = null) {
+    let index = -1;
+
+    for (let i = this.stack.length - 1; i >= 0; i -= 1) {
+      if (this.stack[i].pageName === pageName) {
+        index = i;
+        break;
+      }
+    }
+
+    if (index === -1) {
+      await this.replace(pageName, params ?? {});
+      return;
+    }
+
+    this.stack = this.stack.slice(0, index + 1);
+
+    if (params !== null) {
+      this.stack[index] = {
+        pageName,
+        params
+      };
+    }
+
+    await this.renderCurrent();
+  }
+
   current() {
     return this.stack[this.stack.length - 1] ?? null;
   }
@@ -45,6 +72,8 @@ export class Router {
       throw new Error('Unknown page: ' + current.pageName);
     }
 
+    this.applyTerminalMode(Page);
+
     const page = new Page({
       runtime: this.runtime,
       router: this,
@@ -52,5 +81,20 @@ export class Router {
     });
 
     await page.show();
+  }
+
+  applyTerminalMode(Page) {
+    const terminal = this.runtime.terminal;
+
+    if (!terminal) {
+      return;
+    }
+
+    if (Page.scrollMode === 'normal') {
+      terminal.exitAlternateScreen();
+      return;
+    }
+
+    terminal.enterAlternateScreen();
   }
 }

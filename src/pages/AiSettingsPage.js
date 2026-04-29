@@ -302,6 +302,10 @@ export class AiSettingsPage {
       return 'c';
     }
 
+    if (toolId === 'commit_message') {
+      return 'm';
+    }
+
     if (toolId === 'security_review') {
       return 's';
     }

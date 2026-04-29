@@ -4,9 +4,13 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { Git } from '../src/modules/Git.js';
 import { Scanner } from '../src/modules/Scanner.js';
+import { Router } from '../src/router/Router.js';
+import { DiffPage } from '../src/pages/DiffPage.js';
+import { FilePage } from '../src/pages/FilePage.js';
 import { AiGateway } from '../src/modules/AiGateway.js';
 import { AiPromptManager } from '../src/modules/AiPromptManager.js';
 import { AiDiffBuilder } from '../src/modules/AiDiffBuilder.js';
+import { CommitManager } from '../src/modules/CommitManager.js';
 import { PromptsStore } from '../src/storage/PromptsStore.js';
 import { DEFAULT_PROMPTS } from '../src/data/defaultPrompts.js';
 import { formatTable } from '../src/utils/table.js';
@@ -144,6 +148,7 @@ function smokeQuitPath() {
   assert(readSettings(home).ai.globalMaxPromptCharacters === 15000, 'quit path did not create default AI prompt size');
   assert(readSettings(home).ai.providers.length === 4, 'quit path did not create default AI providers');
   assert(readPrompts(home)['commit_review.system'] === DEFAULT_PROMPTS['commit_review.system'], 'quit path did not create default commit review system prompt');
+  assert(readPrompts(home)['commit_message.pre'] === DEFAULT_PROMPTS['commit_message.pre'], 'quit path did not create default commit message pre-prompt');
   assert(readPrompts(home)['diff_summary.pre'] === DEFAULT_PROMPTS['diff_summary.pre'], 'quit path did not create default diff summary pre-prompt');
 }
 
@@ -501,6 +506,147 @@ function smokeAiProviderSelectSettingsPath() {
   assert(result.status === 0, result.stderr || 'AI provider select settings path failed');
   assert(result.stdout.includes('AI Settings'), 'AI provider select should open AI settings');
   assert(result.stdout.includes('Return Page'), 'AI provider select should return after settings and back actions');
+}
+
+function smokeGeneratedCommitMessageParser() {
+  const manager = new CommitManager(null);
+  const parsed = manager.parseGeneratedCommitResponse([
+    'Title: update repo navigation',
+    'Summary: Adds the generated commit import path.'
+  ].join('\n'));
+  const missingTitle = manager.parseGeneratedCommitResponse('Summary: Missing title.');
+  const missingSummary = manager.parseGeneratedCommitResponse('Title: missing summary');
+
+  assert(parsed.ok, parsed.warning || 'generated commit parser should accept Title and Summary lines');
+  assert(parsed.title === 'update repo navigation', 'generated commit parser should extract title');
+  assert(parsed.body === 'Adds the generated commit import path.', 'generated commit parser should extract summary as body');
+  assert(!missingTitle.ok && missingTitle.warning.includes('Title:'), 'generated commit parser should require Title line');
+  assert(!missingSummary.ok && missingSummary.warning.includes('Summary:'), 'generated commit parser should require Summary line');
+}
+
+function smokeAiProviderSelectCommitMessagePath() {
+  const promptHome = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-ai-commit-prompts-'));
+  const code = `
+    import { Router } from './src/router/Router.js';
+    import { AiProviderSelectPage } from './src/pages/AiProviderSelectPage.js';
+    import { AiGateway } from './src/modules/AiGateway.js';
+    import { AiPromptManager } from './src/modules/AiPromptManager.js';
+    import { CommitManager } from './src/modules/CommitManager.js';
+    import { PromptsStore } from './src/storage/PromptsStore.js';
+
+    const copiedPrompts = [];
+    const openedUrls = [];
+    const color = {
+      bold: (value) => value,
+      dim: (value) => value,
+      green: (value) => value,
+      yellow: (value) => value,
+      red: (value) => value,
+      darkYellow: (value) => value
+    };
+    const aiPromptManager = new AiPromptManager(new PromptsStore(${JSON.stringify(promptHome)}));
+    const clipboard = {
+      copy(text) {
+        copiedPrompts.push(text);
+        return { ok: true, warning: null };
+      },
+      read() {
+        return {
+          ok: true,
+          text: 'Title: update generated commits\\nSummary: Adds the clipboard import flow for generated commit messages.\\n',
+          warning: null
+        };
+      }
+    };
+    const settings = {
+      color: true,
+      ai: {
+        globalMaxPromptCharacters: 100,
+        providers: [
+          { id: 'browser-on', type: 'browser', title: 'Browser Provider', enabled: true, priority: 1, url: 'https://example.com/chat', maxPromptCharacters: 100 }
+        ]
+      }
+    };
+    const runtime = {
+      settings,
+      color,
+      clipboard,
+      commitManager: new CommitManager(null),
+      aiPromptManager,
+      aiGateway: new AiGateway({
+        aiPromptManager,
+        clipboard,
+        browserOpener: {
+          open(url) {
+            openedUrls.push(url);
+            return { ok: true, warning: null };
+          }
+        },
+        localAiClient: {
+          async sendChatCompletion() {
+            return { ok: false, content: '', warning: 'local should not run in browser commit smoke' };
+          }
+        }
+      })
+    };
+    class ReturnPage {
+      async show() {
+        console.log('Return Page');
+      }
+    }
+    class CommitConfirmPage {
+      constructor({ params }) {
+        this.params = params;
+      }
+
+      async show() {
+        console.log('Commit Confirm Title ' + this.params.title);
+        console.log('Commit Confirm Body ' + this.params.body);
+        console.log('Commit Confirm Repo ' + this.params.repoPath);
+      }
+    }
+    const router = new Router(runtime, {
+      returnPage: ReturnPage,
+      aiProviderSelect: AiProviderSelectPage,
+      commitConfirm: CommitConfirmPage
+    });
+
+    await router.open('returnPage');
+    await runtime.aiGateway.openProviderSelection(router, {
+      toolId: 'commit_message',
+      projectName: 'Demo Project',
+      repoName: 'demo-repo',
+      repoPath: '/tmp/demo-repo',
+      payload: {
+        payload: 'USER PAYLOAD',
+        size: 12,
+        maxPromptCharacters: 100,
+        inputSummary: 'staged, unstaged, untracked'
+      }
+    });
+
+    const copied = copiedPrompts[0] || '';
+    console.log('COPIED_HAS_COMMIT_PROMPT ' + String(copied.includes('You write Git commit messages')));
+    console.log('COPIED_ENDS_WITH_PAYLOAD ' + String(copied.endsWith('USER PAYLOAD')));
+    console.log('OPENED_URL ' + String(openedUrls[0] || ''));
+  `;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+    cwd: root,
+    input: ['1', '1'].join('\n') + '\n',
+    encoding: 'utf8'
+  });
+
+  assert(result.status === 0, result.stderr || 'AI provider select commit message path failed');
+  assert(result.stdout.includes('AI: Commit message'), 'commit message picker should render tool title');
+  assert(result.stdout.includes('Prompt copied.'), 'commit message browser path should copy prompt');
+  assert(result.stdout.includes('Opened URL: https://example.com/chat'), 'commit message browser path should open provider URL');
+  assert(result.stdout.includes('Read generated commit message'), 'commit message browser path should offer generated response import');
+  assert(result.stdout.includes('Commit Confirm Title update generated commits'), 'generated commit response should open commit confirmation with title');
+  assert(result.stdout.includes('Commit Confirm Body Adds the clipboard import flow for generated commit messages.'), 'generated commit response should open commit confirmation with body');
+  assert(result.stdout.includes('Commit Confirm Repo /tmp/demo-repo'), 'generated commit response should preserve repo path');
+  assert(result.stdout.includes('COPIED_HAS_COMMIT_PROMPT true'), 'commit message prompt should include system prompt');
+  assert(result.stdout.includes('COPIED_ENDS_WITH_PAYLOAD true'), 'commit message prompt should include user payload');
+  assert(result.stdout.includes('OPENED_URL https://example.com/chat'), 'commit message prompt should open configured provider URL');
 }
 
 function runAiProviderSelectScenario(mode, input) {
@@ -1306,6 +1452,142 @@ function smokeDiffFormatting() {
   assert(formatted.includes(' const context = true;'), 'diff formatter should leave context lines plain');
 }
 
+function smokeDiffPagesUseNormalScroll() {
+  assert(DiffPage.scrollMode === 'normal', 'full diff page should use normal terminal scrollback');
+  assert(FilePage.scrollMode === 'normal', 'file diff page should use normal terminal scrollback');
+}
+
+async function smokeRouterTerminalModePath() {
+  const events = [];
+  const runtime = {
+    terminal: {
+      enterAlternateScreen() {
+        events.push('enter');
+      },
+      exitAlternateScreen() {
+        events.push('exit');
+      }
+    }
+  };
+
+  class FullscreenPage {
+    async show() {
+      events.push('fullscreen');
+    }
+  }
+
+  class NormalScrollPage {
+    static scrollMode = 'normal';
+
+    async show() {
+      events.push('normal');
+    }
+  }
+
+  const router = new Router(runtime, {
+    fullscreen: FullscreenPage,
+    normal: NormalScrollPage
+  });
+
+  await router.open('fullscreen');
+  await router.open('normal');
+  await router.back();
+
+  assert(
+    events.join(',') === 'enter,fullscreen,exit,normal,enter,fullscreen',
+    'router should switch terminal mode per rendered page'
+  );
+}
+
+function smokeCommitConfirmReturnPagePath() {
+  const code = `
+    import { Router } from './src/router/Router.js';
+    import { CommitConfirmPage } from './src/pages/CommitConfirmPage.js';
+
+    const repo = {
+      path: '/tmp/return-repo',
+      modifiedFiles: 1
+    };
+    const color = {
+      bold: (value) => value,
+      dim: (value) => value,
+      green: (value) => value,
+      yellow: (value) => value,
+      red: (value) => value,
+      darkYellow: (value) => value
+    };
+    const runtime = {
+      color,
+      commitManager: {
+        commit(repoPath, title, body) {
+          console.log('COMMIT_CALLED ' + repoPath + ' ' + title + ' ' + body);
+          return { ok: true, warning: null };
+        }
+      },
+      refreshSnapshot() {
+        return {
+          projects: [
+            {
+              name: 'Return Project',
+              repos: [repo]
+            }
+          ]
+        };
+      }
+    };
+    class RepoPage {
+      constructor({ params }) {
+        this.params = params;
+      }
+
+      async show() {
+        console.log('Repo Page Returned ' + this.params.projectName + ' ' + this.params.repoPath);
+      }
+    }
+    class PickerPage {
+      async show() {
+        console.log('Picker Page');
+      }
+    }
+    const router = new Router(runtime, {
+      repo: RepoPage,
+      picker: PickerPage,
+      commitConfirm: CommitConfirmPage
+    });
+
+    await router.open('repo', {
+      projectName: 'Return Project',
+      repoPath: repo.path
+    });
+    await router.open('picker');
+    await router.open('commitConfirm', {
+      projectName: 'Return Project',
+      repoPath: repo.path,
+      title: 'update return path',
+      body: 'Return to repo after commit.',
+      pushAfterCommit: false,
+      returnPage: 'repo',
+      returnParams: {
+        projectName: 'Return Project',
+        repoPath: repo.path
+      }
+    });
+
+    console.log('CURRENT_PAGE ' + router.current().pageName);
+  `;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+    cwd: root,
+    input: ['c', ''].join('\n') + '\n',
+    encoding: 'utf8'
+  });
+
+  assert(result.status === 0, result.stderr || 'commit confirmation return page path failed');
+  assert(result.stdout.includes('COMMIT_CALLED /tmp/return-repo update return path Return to repo after commit.'), 'commit confirmation should call commit before returning');
+  assert(result.stdout.includes('Commit created.'), 'commit confirmation should report successful commit');
+  assert(result.stdout.includes('Repo Page Returned Return Project /tmp/return-repo'), 'commit confirmation should return to repo page');
+  assert(result.stdout.includes('CURRENT_PAGE repo'), 'commit confirmation should leave router on repo page');
+}
+
 function smokeRepoPageOpenAndDiffPath() {
   if (!gitAvailable()) {
     console.log('smoke repo page open skipped: git unavailable');
@@ -1663,6 +1945,8 @@ smokeAiDiffBuilderPayloadPath();
 smokeAiProviderSelectBrowserPath();
 smokeAiProviderSelectWarningPath();
 smokeAiProviderSelectSettingsPath();
+smokeGeneratedCommitMessageParser();
+smokeAiProviderSelectCommitMessagePath();
 smokeAiLocalProviderSuccessPath();
 smokeAiLocalProviderCancelPath();
 smokeAiLocalProviderNon2xxPath();
@@ -1684,9 +1968,12 @@ smokeProjectPageDeleteProjectPath();
 smokeProjectItemsPath();
 smokeScannerMissingProjectPath();
 smokeDiffFormatting();
+smokeDiffPagesUseNormalScroll();
 smokeDuplicateValidation();
 smokeTableFormatting();
 smokeBranchFormatting();
+await smokeRouterTerminalModePath();
+smokeCommitConfirmReturnPagePath();
 smokeRepoPageOpenAndDiffPath();
 smokeAiToolEntryPointsPath();
 smokeRepoFilePagePath();
