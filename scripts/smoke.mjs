@@ -451,6 +451,8 @@ function smokeAiDiffBuilderPayloadPath() {
   assert(truncated.truncated, 'AI diff payload should report truncation');
   assert(truncated.payload.length <= 900, 'AI diff payload should enforce max prompt size on user payload');
   assert(truncated.payload.includes('...TRUNCATED_DIFF_DATA...'), 'AI diff payload should include truncation marker');
+  assert(!truncated.payload.trimStart().startsWith('...TRUNCATED_DIFF_DATA...'), 'AI diff payload should not start with the truncation marker');
+  assert(!truncated.payload.trimEnd().endsWith('...TRUNCATED_DIFF_DATA...'), 'AI diff payload should not end with the truncation marker');
   assert(truncated.payload.includes('diff --git'), 'truncated AI diff payload should preserve diff context');
   assert(truncated.payload.includes('@@'), 'truncated AI diff payload should preserve hunk context');
 

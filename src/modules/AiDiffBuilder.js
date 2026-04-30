@@ -668,29 +668,64 @@ function truncateDiffContent(content, budget) {
     return content;
   }
 
-  if (budget <= minimumTruncatedBlockLength()) {
-    return TRUNCATION_MARKER.slice(0, Math.max(0, budget));
-  }
-
-  const markerBlock = '\n\n' + TRUNCATION_MARKER + '\n\n';
-  const lines = content.split('\n');
-  const firstHunk = lines.findIndex((line) => line.startsWith('@@'));
-  const lastHunk = findLastIndex(lines, (line) => line.startsWith('@@'));
-  const prefixEnd = firstHunk === -1 ? Math.min(lines.length, 8) : Math.min(lines.length, firstHunk + 8);
-  const suffixStart = lastHunk === -1 ? Math.max(prefixEnd, lines.length - 8) : lastHunk;
-  const prefix = lines.slice(0, prefixEnd).join('\n');
-  const suffix = lines.slice(suffixStart).join('\n');
-  const remaining = budget - markerBlock.length;
-  const prefixBudget = Math.floor(remaining * 0.6);
-  const suffixBudget = remaining - Math.min(prefix.length, prefixBudget);
-  const trimmedPrefix = takeStart(prefix, prefixBudget);
-  const trimmedSuffix = takeEnd(suffix, suffixBudget);
-
-  return (trimmedPrefix + markerBlock + trimmedSuffix).slice(0, budget);
+  return truncateWithInteriorHole(content, budget, {
+    headLines: 5,
+    tailLines: 95,
+    markerBlock: '\n\n' + TRUNCATION_MARKER + '\n\n'
+  });
 }
 
 function minimumTruncatedBlockLength() {
   return TRUNCATION_MARKER.length + 24;
+}
+
+function truncateWithInteriorHole(text, budget, options) {
+  const maxLength = Math.max(0, Number(budget) || 0);
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  if (maxLength <= options.markerBlock.length + 2) {
+    return takeStart(text, maxLength);
+  }
+
+  const lines = text.split('\n');
+  const headEnd = Math.min(lines.length, options.headLines);
+  const tailStart = Math.max(headEnd, lines.length - options.tailLines);
+  const reservedHead = lines.slice(0, headEnd).join('\n');
+  const reservedTail = lines.slice(tailStart).join('\n');
+  const contentBudget = maxLength - options.markerBlock.length;
+  const preferredTailBudget = Math.min(reservedTail.length, Math.max(1, Math.floor(contentBudget * 0.85)));
+  const headBudget = Math.max(0, contentBudget - preferredTailBudget);
+  const head = takeStart(reservedHead, headBudget);
+  const tailBudget = Math.max(0, contentBudget - head.length);
+  const tail = takeEnd(reservedTail, tailBudget);
+
+  if (tail.length === 0) {
+    return takeStart(text, maxLength);
+  }
+
+  let result = head + options.markerBlock + tail;
+
+  if (result.length <= maxLength) {
+    return result;
+  }
+
+  const adjustedHeadBudget = Math.max(0, maxLength - options.markerBlock.length - tail.length);
+  const adjustedHead = takeStart(reservedHead, adjustedHeadBudget);
+
+  if (adjustedHead.length === 0) {
+    return takeStart(text, maxLength);
+  }
+
+  result = adjustedHead + options.markerBlock + tail;
+
+  if (result.length <= maxLength) {
+    return result;
+  }
+
+  return takeStart(text, maxLength);
 }
 
 function takeStart(text, budget) {
@@ -713,28 +748,16 @@ function takeEnd(text, budget) {
   return firstNewline >= 0 ? sliced.slice(firstNewline + 1) : sliced;
 }
 
-function findLastIndex(values, predicate) {
-  for (let index = values.length - 1; index >= 0; index -= 1) {
-    if (predicate(values[index], index)) {
-      return index;
-    }
-  }
-
-  return -1;
-}
-
 function hardLimitPayload(payload, maxPromptCharacters) {
   if (payload.length <= maxPromptCharacters) {
     return payload;
   }
 
-  if (maxPromptCharacters <= TRUNCATION_MARKER.length) {
-    return TRUNCATION_MARKER.slice(0, Math.max(0, maxPromptCharacters));
-  }
-
-  const markerBlock = '\n' + TRUNCATION_MARKER + '\n';
-  const headLength = Math.max(0, maxPromptCharacters - markerBlock.length);
-  return payload.slice(0, headLength) + markerBlock;
+  return truncateWithInteriorHole(payload, maxPromptCharacters, {
+    headLines: 20,
+    tailLines: 95,
+    markerBlock: '\n' + TRUNCATION_MARKER + '\n'
+  });
 }
 
 function countOccurrences(text, value) {
