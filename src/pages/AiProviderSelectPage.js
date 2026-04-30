@@ -119,6 +119,7 @@ export class AiProviderSelectPage {
     );
 
     console.log('');
+    this.renderPayloadWarnings(params);
 
     if (result.copied) {
       console.log(color.green('Prompt copied.'));
@@ -157,6 +158,7 @@ export class AiProviderSelectPage {
     console.log('Endpoint: ' + this.formatEndpointHost(provider.endpointUrl));
     console.log('Model: ' + (provider.model || 'Not set'));
     console.log('');
+    this.renderPayloadWarnings(params);
 
     const answer = await promptLine('Send prompt to this local endpoint? (yes/no): ');
 
@@ -334,11 +336,26 @@ export class AiProviderSelectPage {
     const size = Number(this.params.payloadSize ?? String(this.params.userPayload ?? '').length);
     const max = Number(this.params.maxPromptCharacters ?? 0);
 
+    if (this.params.promptLimitPending === true) {
+      return String(size) + ' characters (provider limit applied after selection)';
+    }
+
     if (Number.isFinite(max) && max > 0) {
       return String(size) + ' / ' + String(max) + ' characters';
     }
 
     return String(size) + ' characters';
+  }
+
+  renderPayloadWarnings(params) {
+    const warnings = Array.isArray(params.payloadWarnings) ? params.payloadWarnings : [];
+
+    if (warnings.length === 0) {
+      return;
+    }
+
+    warnings.forEach((warning) => console.log(this.runtime.color.yellow(warning)));
+    console.log('');
   }
 
   formatEndpointHost(endpointUrl) {

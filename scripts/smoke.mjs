@@ -77,9 +77,16 @@ function initGitRepo(repoPath) {
   runGit(['init'], repoPath);
 }
 
-function commitAll(repoPath, message) {
+function commitAll(repoPath, message, body = '') {
   runGit(['add', '.'], repoPath);
-  runGit(['-c', 'user.name=Repoteer Smoke', '-c', 'user.email=smoke@example.com', 'commit', '-m', message], repoPath);
+
+  const args = ['-c', 'user.name=Repoteer Smoke', '-c', 'user.email=smoke@example.com', 'commit', '-m', message];
+
+  if (body) {
+    args.push('-m', body);
+  }
+
+  runGit(args, repoPath);
 }
 
 function readGitState(repoPath) {
@@ -219,34 +226,32 @@ function smokeAiSettingsPersistencePath() {
     '70',
     '9000',
     '',
-    'e',
     '1',
-    't',
+    '1',
     '',
-    'u',
+    '3',
     'http://localhost:8080/v1/chat/completions',
     '',
-    'o',
+    '4',
     'demo-local-model',
     '',
-    'p',
+    '5',
     '30',
     '',
-    'm',
+    '6',
     '11000',
     '',
     'b',
-    'e',
     '3',
-    't',
+    '1',
     '',
-    'u',
+    '3',
     'https://chatgpt.com/?temporary-chat=false',
     '',
-    'p',
+    '4',
     '25',
     '',
-    'm',
+    '5',
     '12000',
     '',
     'b',
@@ -366,6 +371,11 @@ function smokeAiDiffBuilderPayloadPath() {
   fs.writeFileSync(path.join(repoPath, 'unstaged.js'), 'export const unstaged = 1;\n');
   commitAll(repoPath, 'seed AI diff builder');
 
+  for (let index = 1; index <= 9; index += 1) {
+    fs.writeFileSync(path.join(repoPath, 'history.txt'), 'history ' + String(index) + '\n');
+    commitAll(repoPath, 'history commit ' + String(index), 'Body for history ' + String(index));
+  }
+
   fs.writeFileSync(path.join(repoPath, 'staged.js'), 'export const staged = 2;\n');
   runGit(['add', 'staged.js'], repoPath);
   fs.writeFileSync(path.join(repoPath, 'unstaged.js'), 'export const unstaged = 2;\n');
@@ -378,7 +388,32 @@ function smokeAiDiffBuilderPayloadPath() {
 
   const builder = new AiDiffBuilder(new Git());
   const full = builder.build(repoPath, { maxPromptCharacters: 20000 });
+  const withRecentCommitLogs = builder.build(repoPath, {
+    maxPromptCharacters: 30000,
+    includeRecentCommitLogs: true
+  });
+  const uncapped = builder.build(repoPath, {
+    maxPromptCharacters: 900,
+    applyMaxPromptCharacters: false
+  });
   const truncated = builder.build(repoPath, { maxPromptCharacters: 900 });
+  const aiGateway = new AiGateway({
+    aiPromptManager: null,
+    aiDiffBuilder: builder,
+    clipboard: null,
+    browserOpener: null,
+    localAiClient: null
+  });
+  const commitMessagePayload = aiGateway.buildRepoPayload({
+    repoPath,
+    settings: { ai: { globalMaxPromptCharacters: 30000 } },
+    toolId: 'commit_message'
+  });
+  const commitReviewPayload = aiGateway.buildRepoPayload({
+    repoPath,
+    settings: { ai: { globalMaxPromptCharacters: 30000 } },
+    toolId: 'commit_review'
+  });
 
   assert(full.ok, full.warnings.join('\n') || 'AI diff builder should succeed');
   assert(full.status === 'warning', 'AI diff builder should warn when files are omitted');
@@ -392,6 +427,24 @@ function smokeAiDiffBuilderPayloadPath() {
   assert(full.payload.includes('[Omitted likely base64 data: base64.txt]'), 'AI diff payload should mark base64-like omissions');
   assert(!full.payload.includes('A'.repeat(160)), 'AI diff payload should not include base64-like content');
   assert(!full.truncated, 'large max AI diff payload should not be truncated');
+  assert(!full.payload.includes('Recent commit messages'), 'regular AI diff payload should not include recent commit logs');
+
+  assert(withRecentCommitLogs.ok, withRecentCommitLogs.warnings.join('\n') || 'AI diff builder should include recent commit logs');
+  assert(withRecentCommitLogs.payload.includes('Recent commit messages (last 8):'), 'commit-message AI payload should label recent commit logs');
+  assert(withRecentCommitLogs.payload.includes('1. Title: history commit 9'), 'commit-message AI payload should include the newest commit title');
+  assert(withRecentCommitLogs.payload.includes('Body for history 9'), 'commit-message AI payload should include commit bodies');
+  assert(withRecentCommitLogs.payload.includes('history commit 2'), 'commit-message AI payload should include the eighth recent commit title');
+  assert(!withRecentCommitLogs.payload.includes('history commit 1'), 'commit-message AI payload should include only eight recent commits');
+  assert(commitMessagePayload.payload.includes('Recent commit messages (last 8):'), 'gateway should add recent commit logs for commit-message prompts');
+  assert(!commitReviewPayload.payload.includes('Recent commit messages'), 'gateway should not add recent commit logs for commit-review prompts');
+
+  assert(uncapped.ok, uncapped.warnings.join('\n') || 'uncapped AI diff builder should succeed');
+  assert(!uncapped.truncated, 'uncapped AI diff payload should not truncate before provider selection');
+  assert(uncapped.promptLimitPending, 'uncapped AI diff payload should report pending provider limit');
+  assert(uncapped.maxPromptCharacters === null, 'uncapped AI diff payload should not report a selected max');
+  assert(uncapped.payload.length > 900, 'uncapped AI diff payload should preserve full prepared payload before provider selection');
+  assert(uncapped.payload.includes('Max user payload characters: provider-specific, applied after provider selection'), 'uncapped AI diff payload should label deferred provider max');
+  assert(!uncapped.warnings.includes('AI diff payload was truncated to fit the max prompt size.'), 'uncapped AI diff payload should not warn about truncation');
 
   assert(truncated.ok, truncated.warnings.join('\n') || 'truncated AI diff builder should succeed');
   assert(truncated.truncated, 'AI diff payload should report truncation');
@@ -506,6 +559,38 @@ function smokeAiProviderSelectSettingsPath() {
   assert(result.status === 0, result.stderr || 'AI provider select settings path failed');
   assert(result.stdout.includes('AI Settings'), 'AI provider select should open AI settings');
   assert(result.stdout.includes('Return Page'), 'AI provider select should return after settings and back actions');
+}
+
+function smokeAiProviderSelectDeferredLimitPath() {
+  if (!gitAvailable()) {
+    console.log('smoke AI provider deferred limit skipped: git unavailable');
+    return;
+  }
+
+  const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-ai-provider-limit-repo-'));
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'large.js'), 'export const seed = true;\n');
+  commitAll(repoPath, 'seed deferred provider limit');
+  fs.writeFileSync(path.join(repoPath, 'large.js'), Array.from({ length: 140 }, (_, index) => {
+    return 'export const value' + String(index) + ' = ' + String(index) + ';';
+  }).join('\n') + '\n');
+
+  const initial = runAiProviderSelectDeferredLimitScenario(repoPath, ['b'].join('\n') + '\n');
+
+  assert(initial.status === 0, initial.stderr || 'AI provider select deferred limit initial path failed');
+  assert(initial.stdout.includes('provider limit applied after selection'), 'AI provider select should explain that provider limits are deferred');
+  assert(!initial.stdout.includes('Payload size: 900 / 900 characters'), 'AI provider select should not show a selected provider max before selection');
+  assert(!initial.stdout.includes('AI diff payload was truncated:'), 'AI provider select should not warn about truncation before provider selection');
+
+  const selected = runAiProviderSelectDeferredLimitScenario(repoPath, ['1', '', 'b'].join('\n') + '\n');
+  const selectedText = stripAnsi(selected.stdout);
+
+  assert(selected.status === 0, selected.stderr || 'AI provider select deferred limit selected path failed');
+  assert(selectedText.includes('COPIED_HAS_TRUNCATED true'), 'AI provider selection should truncate after a provider is selected');
+  assert(selectedText.includes('AI diff payload was truncated:'), 'AI provider select should warn about provider-specific truncation after selection');
+  assert(/AI diff payload was truncated: [0-9]+ -> [0-9]+ characters \([0-9]+ removed, [0-9.]+% removed\)\./.test(selectedText), 'AI provider truncation warning should include removed characters and percentage');
+  assert(selectedText.indexOf('AI diff payload was truncated:') < selectedText.indexOf('Prompt copied.'), 'AI provider truncation warning should show before browser send confirmation');
 }
 
 function smokeGeneratedCommitMessageParser() {
@@ -748,6 +833,90 @@ function runAiProviderSelectScenario(mode, input) {
     console.log('COPIED_HAS_PRE ' + String(copied.includes('Summarize the following prepared diff.')));
     console.log('COPIED_ENDS_WITH_PAYLOAD ' + String(copied.endsWith('USER PAYLOAD')));
     console.log('OPENED_URL ' + String(openedUrls[0] || ''));
+  `;
+
+  return spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+    cwd: root,
+    input,
+    encoding: 'utf8'
+  });
+}
+
+function runAiProviderSelectDeferredLimitScenario(repoPath, input) {
+  const promptHome = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-ai-select-deferred-prompts-'));
+  const code = `
+    import { Router } from './src/router/Router.js';
+    import { AiProviderSelectPage } from './src/pages/AiProviderSelectPage.js';
+    import { AiGateway } from './src/modules/AiGateway.js';
+    import { AiPromptManager } from './src/modules/AiPromptManager.js';
+    import { AiDiffBuilder } from './src/modules/AiDiffBuilder.js';
+    import { Git } from './src/modules/Git.js';
+    import { PromptsStore } from './src/storage/PromptsStore.js';
+
+    const copiedPrompts = [];
+    const color = {
+      bold: (value) => value,
+      dim: (value) => value,
+      green: (value) => value,
+      yellow: (value) => value,
+      red: (value) => value,
+      darkYellow: (value) => value
+    };
+    const aiPromptManager = new AiPromptManager(new PromptsStore(${JSON.stringify(promptHome)}));
+    const settings = {
+      color: true,
+      ai: {
+        globalMaxPromptCharacters: 15000,
+        providers: [
+          { id: 'browser-small', type: 'browser', title: 'Small Browser', enabled: true, priority: 1, url: 'https://example.com/chat', maxPromptCharacters: 900 }
+        ]
+      }
+    };
+    const runtime = {
+      settings,
+      color,
+      aiPromptManager,
+      aiGateway: new AiGateway({
+        aiPromptManager,
+        aiDiffBuilder: new AiDiffBuilder(new Git()),
+        clipboard: {
+          copy(text) {
+            copiedPrompts.push(text);
+            return { ok: true, warning: null };
+          }
+        },
+        browserOpener: {
+          open() {
+            return { ok: true, warning: null };
+          }
+        },
+        localAiClient: {
+          async sendChatCompletion() {
+            return { ok: false, content: '', warning: 'local should not run in deferred limit smoke' };
+          }
+        }
+      })
+    };
+    class ReturnPage {
+      async show() {
+        console.log('Return Page');
+      }
+    }
+    const router = new Router(runtime, {
+      returnPage: ReturnPage,
+      aiProviderSelect: AiProviderSelectPage
+    });
+
+    await router.open('returnPage');
+    await runtime.aiGateway.openRepoTool(router, {
+      toolId: 'diff_summary',
+      projectName: 'Demo Project',
+      repo: { name: 'demo-repo', path: ${JSON.stringify(repoPath)} },
+      settings,
+      returnPage: 'returnPage'
+    });
+
+    console.log('COPIED_HAS_TRUNCATED ' + String((copiedPrompts[0] || '').includes('...TRUNCATED_DIFF_DATA...')));
   `;
 
   return spawnSync(process.execPath, ['--input-type=module', '-e', code], {
@@ -1945,6 +2114,7 @@ smokeAiDiffBuilderPayloadPath();
 smokeAiProviderSelectBrowserPath();
 smokeAiProviderSelectWarningPath();
 smokeAiProviderSelectSettingsPath();
+smokeAiProviderSelectDeferredLimitPath();
 smokeGeneratedCommitMessageParser();
 smokeAiProviderSelectCommitMessagePath();
 smokeAiLocalProviderSuccessPath();

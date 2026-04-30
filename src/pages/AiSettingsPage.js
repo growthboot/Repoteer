@@ -64,6 +64,15 @@ export class AiSettingsPage {
       return;
     }
 
+    if (/^\d+$/.test(key)) {
+      const provider = providers[Number(key) - 1] ?? null;
+
+      if (provider) {
+        await this.router.open('aiProviderEdit', { providerId: provider.id });
+        return;
+      }
+    }
+
     const selectedTool = this.runtime.aiPromptManager.listTools().find((tool) => {
       return this.promptActionForTool(tool.id) === key;
     }) ?? null;

@@ -3,6 +3,7 @@ import path from 'path';
 
 const TRUNCATION_MARKER = '...TRUNCATED_DIFF_DATA...';
 const DEFAULT_MAX_PROMPT_CHARACTERS = 15000;
+const RECENT_COMMIT_LOG_LIMIT = 8;
 const SAMPLE_BYTES = 262144;
 const MEDIA_EXTENSIONS = new Set(
   '.3gp .aif .aiff .avi .bmp .flac .gif .heic .ico .jpeg .jpg .m4a .m4v .mov .mp3 .mp4 .ogg .otf .pdf .png .psd .svg .svgz .ttf .wav .webm .webp .woff .woff2'.split(' ')
@@ -15,6 +16,10 @@ export class AiDiffBuilder {
 
   build(repoPath, options = {}) {
     const maxPromptCharacters = normalizeMaxPromptCharacters(options.maxPromptCharacters);
+    const applyMaxPromptCharacters = options.applyMaxPromptCharacters !== false;
+    const recentCommitLogs = options.includeRecentCommitLogs === true
+      ? this.getRecentCommitLogs(repoPath, RECENT_COMMIT_LOG_LIMIT)
+      : null;
     const staged = this.listChangedFiles(repoPath, ['diff', '--cached', '--name-only', '--no-ext-diff']);
     const unstaged = this.listChangedFiles(repoPath, ['diff', '--name-only', '--no-ext-diff']);
     const untracked = this.listChangedFiles(repoPath, ['ls-files', '--others', '--exclude-standard']);
@@ -26,7 +31,8 @@ export class AiDiffBuilder {
           status: 'warning',
           payload: '',
           size: 0,
-          maxPromptCharacters,
+          maxPromptCharacters: applyMaxPromptCharacters ? maxPromptCharacters : null,
+          promptLimitPending: !applyMaxPromptCharacters,
           truncated: false,
           omittedFiles: [],
           includedFiles: [],
@@ -64,20 +70,35 @@ export class AiDiffBuilder {
         message: part.message
       }));
     const initialPayload = this.renderPayload(parts, {
-      maxPromptCharacters,
+      maxPromptCharacters: applyMaxPromptCharacters ? maxPromptCharacters : null,
+      promptLimitPending: !applyMaxPromptCharacters,
       truncated: false,
       omittedFiles,
-      promptOmittedFiles: []
+      promptOmittedFiles: [],
+      recentCommitLogs
     });
-    const truncatedResult = this.truncatePayload(parts, initialPayload, maxPromptCharacters, omittedFiles);
+    const truncatedResult = applyMaxPromptCharacters
+      ? this.truncatePayload(parts, initialPayload, maxPromptCharacters, omittedFiles, recentCommitLogs)
+      : {
+          payload: initialPayload,
+          truncated: false,
+          promptOmittedFiles: []
+        };
     const warnings = [];
+    const truncationSummary = truncatedResult.truncated
+      ? buildTruncationSummary(initialPayload.length, truncatedResult.payload.length)
+      : null;
 
     if (omittedFiles.length > 0) {
       warnings.push('Some files were omitted from the AI diff payload.');
     }
 
     if (truncatedResult.truncated) {
-      warnings.push('AI diff payload was truncated to fit the max prompt size.');
+      warnings.push(formatTruncationWarning(truncationSummary));
+    }
+
+    if (recentCommitLogs && !recentCommitLogs.ok) {
+      warnings.push(recentCommitLogs.warning);
     }
 
     return {
@@ -85,8 +106,10 @@ export class AiDiffBuilder {
       status: warnings.length > 0 ? 'warning' : 'success',
       payload: truncatedResult.payload,
       size: truncatedResult.payload.length,
-      maxPromptCharacters,
+      maxPromptCharacters: applyMaxPromptCharacters ? maxPromptCharacters : null,
+      promptLimitPending: !applyMaxPromptCharacters,
       truncated: truncatedResult.truncated,
+      truncationSummary,
       omittedFiles: [...omittedFiles, ...truncatedResult.promptOmittedFiles],
       includedFiles,
       inputSummary: 'staged, unstaged tracked, and untracked text changes',
@@ -108,6 +131,30 @@ export class AiDiffBuilder {
     return {
       ok: true,
       files: this.git.parseLines(result.stdout),
+      warning: null
+    };
+  }
+
+  getRecentCommitLogs(repoPath, limit) {
+    const result = this.git.run([
+      '-C',
+      repoPath,
+      'log',
+      '--max-count=' + String(limit),
+      '--format=%x1f%s%x1f%b%x1e'
+    ]);
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        logs: [],
+        warning: result.stderr || 'Recent commit messages were not available.'
+      };
+    }
+
+    return {
+      ok: true,
+      logs: parseRecentCommitLogs(result.stdout),
       warning: null
     };
   }
@@ -237,9 +284,33 @@ export class AiDiffBuilder {
     const lines = [
       'AI-ready Git diff payload',
       'Diff input: staged changes, unstaged tracked changes, and untracked text-like files.',
-      'Max user payload characters: ' + String(state.maxPromptCharacters),
+      'Max user payload characters: ' + formatMaxPromptCharacters(state),
       'Payload status: ' + (state.truncated ? 'truncated' : 'complete')
     ];
+
+    if (state.recentCommitLogs) {
+      lines.push('', 'Recent commit messages (last ' + String(RECENT_COMMIT_LOG_LIMIT) + '):');
+
+      if (!state.recentCommitLogs.ok) {
+        lines.push('Not available.');
+      } else if (state.recentCommitLogs.logs.length === 0) {
+        lines.push('No commits found.');
+      } else {
+        state.recentCommitLogs.logs.forEach((log, index) => {
+          lines.push(String(index + 1) + '. Title: ' + log.title);
+
+          if (log.body) {
+            lines.push('   Body:');
+
+            for (const line of log.body.split('\n')) {
+              lines.push('   ' + line);
+            }
+          } else {
+            lines.push('   Body: (empty)');
+          }
+        });
+      }
+    }
 
     if (state.omittedFiles.length > 0 || state.promptOmittedFiles.length > 0) {
       lines.push('', 'Omitted files:');
@@ -264,7 +335,7 @@ export class AiDiffBuilder {
     return lines.join('\n');
   }
 
-  truncatePayload(parts, payload, maxPromptCharacters, omittedFiles) {
+  truncatePayload(parts, payload, maxPromptCharacters, omittedFiles, recentCommitLogs) {
     if (payload.length <= maxPromptCharacters) {
       return {
         payload,
@@ -280,7 +351,8 @@ export class AiDiffBuilder {
       maxPromptCharacters,
       truncated: true,
       omittedFiles,
-      promptOmittedFiles
+      promptOmittedFiles,
+      recentCommitLogs
     });
 
     for (const part of diffParts) {
@@ -308,7 +380,8 @@ export class AiDiffBuilder {
         maxPromptCharacters,
         truncated: true,
         omittedFiles,
-        promptOmittedFiles
+        promptOmittedFiles,
+        recentCommitLogs
       });
 
       if (payloadSoFar.length > maxPromptCharacters) {
@@ -320,7 +393,8 @@ export class AiDiffBuilder {
           maxPromptCharacters,
           truncated: true,
           omittedFiles,
-          promptOmittedFiles
+          promptOmittedFiles,
+          recentCommitLogs
         });
       }
     }
@@ -329,7 +403,8 @@ export class AiDiffBuilder {
       maxPromptCharacters,
       truncated: true,
       omittedFiles,
-      promptOmittedFiles
+      promptOmittedFiles,
+      recentCommitLogs
     });
 
     if (nextPayload.length > maxPromptCharacters) {
@@ -357,6 +432,80 @@ export class AiDiffBuilder {
 function normalizeMaxPromptCharacters(value) {
   const parsed = Number.parseInt(String(value ?? DEFAULT_MAX_PROMPT_CHARACTERS), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_PROMPT_CHARACTERS;
+}
+
+function formatMaxPromptCharacters(state) {
+  const maxPromptCharacters = Number(state.maxPromptCharacters);
+
+  if (state.promptLimitPending || !Number.isFinite(maxPromptCharacters) || maxPromptCharacters <= 0) {
+    return 'provider-specific, applied after provider selection';
+  }
+
+  return String(maxPromptCharacters);
+}
+
+function buildTruncationSummary(originalCharacters, finalCharacters) {
+  const original = Math.max(0, Number(originalCharacters) || 0);
+  const final = Math.max(0, Number(finalCharacters) || 0);
+  const removed = Math.max(0, original - final);
+  const removedPercent = original > 0 ? (removed / original) * 100 : 0;
+
+  return {
+    originalCharacters: original,
+    finalCharacters: final,
+    removedCharacters: removed,
+    removedPercent
+  };
+}
+
+function formatTruncationWarning(summary) {
+  if (!summary) {
+    return 'AI diff payload was truncated to fit the max prompt size.';
+  }
+
+  return [
+    'AI diff payload was truncated: ',
+    String(summary.originalCharacters),
+    ' -> ',
+    String(summary.finalCharacters),
+    ' characters (',
+    String(summary.removedCharacters),
+    ' removed, ',
+    formatPercent(summary.removedPercent),
+    '% removed).'
+  ].join('');
+}
+
+function formatPercent(value) {
+  const rounded = Math.round((Number(value) || 0) * 10) / 10;
+
+  if (Number.isInteger(rounded)) {
+    return String(rounded);
+  }
+
+  return rounded.toFixed(1);
+}
+
+function parseRecentCommitLogs(output) {
+  return String(output ?? '')
+    .split('\x1e')
+    .map((record) => record.trim())
+    .filter(Boolean)
+    .map((record) => {
+      const parts = record.split('\x1f');
+      const title = cleanCommitLogText(parts[1] ?? '');
+      const body = cleanCommitLogText(parts.slice(2).join('\x1f'));
+
+      return {
+        title,
+        body
+      };
+    })
+    .filter((log) => log.title || log.body);
+}
+
+function cleanCommitLogText(text) {
+  return String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
 }
 
 function getMediaReason(file) {

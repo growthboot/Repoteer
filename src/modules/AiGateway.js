@@ -13,7 +13,9 @@ export class AiGateway {
     const payload = this.buildRepoPayload({
       repoPath: params.repoPath ?? params.repo?.path,
       settings: params.settings,
-      maxPromptCharacters: params.maxPromptCharacters
+      maxPromptCharacters: params.maxPromptCharacters,
+      toolId: params.toolId,
+      applyMaxPromptCharacters: false
     });
 
     await this.openProviderSelection(router, {
@@ -29,8 +31,9 @@ export class AiGateway {
     await router.open('aiProviderSelect', this.normalizeSelectionParams(params));
   }
 
-  buildRepoPayload({ repoPath, settings, maxPromptCharacters }) {
+  buildRepoPayload({ repoPath, settings, maxPromptCharacters, toolId, applyMaxPromptCharacters = true }) {
     const normalizedMaxPromptCharacters = this.getMaxPromptCharacters(maxPromptCharacters, settings);
+    const payloadMaxPromptCharacters = applyMaxPromptCharacters ? normalizedMaxPromptCharacters : null;
 
     if (!repoPath) {
       return {
@@ -38,7 +41,8 @@ export class AiGateway {
         status: 'warning',
         payload: '',
         size: 0,
-        maxPromptCharacters: normalizedMaxPromptCharacters,
+        maxPromptCharacters: payloadMaxPromptCharacters,
+        promptLimitPending: !applyMaxPromptCharacters,
         inputSummary: 'staged, unstaged tracked, and untracked text changes',
         warnings: ['Repo path was not available for AI diff payload building.']
       };
@@ -50,14 +54,17 @@ export class AiGateway {
         status: 'warning',
         payload: '',
         size: 0,
-        maxPromptCharacters: normalizedMaxPromptCharacters,
+        maxPromptCharacters: payloadMaxPromptCharacters,
+        promptLimitPending: !applyMaxPromptCharacters,
         inputSummary: 'staged, unstaged tracked, and untracked text changes',
         warnings: ['AI diff payload builder is not available.']
       };
     }
 
     return this.aiDiffBuilder.build(repoPath, {
-      maxPromptCharacters: normalizedMaxPromptCharacters
+      maxPromptCharacters: normalizedMaxPromptCharacters,
+      applyMaxPromptCharacters,
+      includeRecentCommitLogs: toolId === 'commit_message'
     });
   }
 
@@ -71,14 +78,16 @@ export class AiGateway {
       };
     }
 
-    if (Number(selectionParams.maxPromptCharacters) === maxPromptCharacters) {
+    if (selectionParams.promptLimitPending !== true && Number(selectionParams.maxPromptCharacters) === maxPromptCharacters) {
       return selectionParams;
     }
 
     const payload = this.buildRepoPayload({
       repoPath: selectionParams.repoPath,
       settings,
-      maxPromptCharacters
+      maxPromptCharacters,
+      toolId: selectionParams.toolId,
+      applyMaxPromptCharacters: true
     });
 
     return this.normalizeSelectionParams({
@@ -213,6 +222,7 @@ export class AiGateway {
 
   normalizeSelectionParams(params) {
     const payload = params.payload ?? params.payloadResult ?? {};
+    const maxPromptCharacters = normalizeSelectionMaxPromptCharacters(params.maxPromptCharacters ?? payload.maxPromptCharacters);
 
     return {
       toolId: params.toolId,
@@ -222,7 +232,8 @@ export class AiGateway {
       returnPage: params.returnPage ?? null,
       userPayload: String(params.userPayload ?? payload.payload ?? ''),
       payloadSize: Number(params.payloadSize ?? payload.size ?? String(payload.payload ?? '').length),
-      maxPromptCharacters: Number(params.maxPromptCharacters ?? payload.maxPromptCharacters ?? 0),
+      maxPromptCharacters,
+      promptLimitPending: params.promptLimitPending ?? payload.promptLimitPending ?? false,
       inputSummary: String(params.inputSummary ?? payload.inputSummary ?? 'staged, unstaged tracked, and untracked text changes'),
       payloadWarnings: Array.isArray(params.payloadWarnings)
         ? params.payloadWarnings
@@ -231,4 +242,9 @@ export class AiGateway {
           : []
     };
   }
+}
+
+function normalizeSelectionMaxPromptCharacters(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }

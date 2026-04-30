@@ -1,5 +1,6 @@
 import { promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
+import { formatTable } from '../utils/table.js';
 
 export class AiProviderEditPage {
   constructor({ runtime, router, params }) {
@@ -24,28 +25,35 @@ export class AiProviderEditPage {
 
     console.log(color.bold('Edit AI Provider: ' + provider.title));
     console.log('');
-    console.log('Type                 ' + this.formatType(provider.type));
-    console.log('Enabled              ' + (provider.enabled ? 'On' : 'Off'));
+    console.log('Type: ' + this.formatType(provider.type));
 
     if (provider.type === 'local') {
-      console.log('Endpoint             ' + (provider.endpointUrl || ''));
-      console.log('Format               OpenAI-compatible chat completions');
-      console.log('Model                ' + (provider.model || ''));
-    } else {
-      console.log('URL                  ' + (provider.url || ''));
+      console.log('Format: OpenAI-compatible chat completions');
     }
 
-    console.log('Priority             ' + String(provider.priority));
-    console.log('Max prompt size      ' + String(provider.maxPromptCharacters) + ' characters');
+    console.log('');
+    this.renderEditableRows(provider);
     console.log('');
     formatActionColumns(this.actionsForProvider(provider, color)).forEach((row) => console.log(row));
     console.log('');
 
-    const answer = await promptAction('Action: ');
+    const answer = await promptAction('Row/action: ');
     const key = answer.trim().toLowerCase();
+
+    const selectedRow = this.editableRowsForProvider(provider)[Number(key) - 1] ?? null;
+
+    if (selectedRow) {
+      await this.runRowAction(provider, selectedRow.action);
+      return;
+    }
 
     if (key === 't') {
       await this.updateProvider(provider, { enabled: !provider.enabled }, 'Provider updated.');
+      return;
+    }
+
+    if (key === 'n') {
+      await this.changeTitle(provider);
       return;
     }
 
@@ -77,9 +85,112 @@ export class AiProviderEditPage {
     await this.router.replace('aiProviderEdit', { providerId: provider.id });
   }
 
+  renderEditableRows(provider) {
+    const color = this.runtime.color;
+    const rows = [
+      ['', color.bold('Setting'), color.bold('value')]
+    ];
+
+    this.editableRowsForProvider(provider).forEach((row, index) => {
+      rows.push([
+        String(index + 1) + '.',
+        row.label,
+        row.value
+      ]);
+    });
+
+    formatTable(rows).forEach((row) => console.log(row));
+  }
+
+  editableRowsForProvider(provider) {
+    const rows = [
+      {
+        label: 'Enabled',
+        value: provider.enabled ? 'On' : 'Off',
+        action: 'toggle'
+      },
+      {
+        label: 'Title',
+        value: provider.title,
+        action: 'title'
+      }
+    ];
+
+    if (provider.type === 'local') {
+      rows.push(
+        {
+          label: 'Endpoint URL',
+          value: provider.endpointUrl || '',
+          action: 'url'
+        },
+        {
+          label: 'Model',
+          value: provider.model || '',
+          action: 'model'
+        }
+      );
+    } else {
+      rows.push({
+        label: 'URL',
+        value: provider.url || '',
+        action: 'url'
+      });
+    }
+
+    rows.push(
+      {
+        label: 'Priority',
+        value: String(provider.priority),
+        action: 'priority'
+      },
+      {
+        label: 'Max prompt size',
+        value: String(provider.maxPromptCharacters) + ' characters',
+        action: 'maxPromptCharacters'
+      }
+    );
+
+    return rows;
+  }
+
+  async runRowAction(provider, action) {
+    if (action === 'toggle') {
+      await this.updateProvider(provider, { enabled: !provider.enabled }, 'Provider updated.');
+      return;
+    }
+
+    if (action === 'title') {
+      await this.changeTitle(provider);
+      return;
+    }
+
+    if (action === 'url') {
+      await this.changeUrl(provider);
+      return;
+    }
+
+    if (action === 'model') {
+      await this.changeModel(provider);
+      return;
+    }
+
+    if (action === 'priority') {
+      await this.changePriority(provider);
+      return;
+    }
+
+    if (action === 'maxPromptCharacters') {
+      await this.changeMaxPromptCharacters(provider);
+      return;
+    }
+
+    await this.router.replace('aiProviderEdit', { providerId: provider.id });
+  }
+
   actionsForProvider(provider, color) {
     const actions = [
       color.bold('T.') + ' Toggle enabled',
+      color.bold('N.') + ' Change title',
       color.bold('U.') + ' Change ' + (provider.type === 'local' ? 'endpoint URL' : 'URL')
     ];
 
@@ -94,6 +205,17 @@ export class AiProviderEditPage {
     );
 
     return actions;
+  }
+
+  async changeTitle(provider) {
+    const value = await promptLine('Title [' + provider.title + ']: ');
+
+    if (this.isCancel(value) || !value.trim()) {
+      await this.router.replace('aiProviderEdit', { providerId: provider.id });
+      return;
+    }
+
+    await this.updateProvider(provider, { title: value }, 'Provider updated.');
   }
 
   async changeUrl(provider) {
