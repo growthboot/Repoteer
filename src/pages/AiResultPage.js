@@ -22,20 +22,19 @@ export class AiResultPage {
     console.log('');
     formatActionColumns([
       color.bold('C.') + ' Copy result',
-      color.bold('R.') + ' Run again',
-      color.bold('B.') + ' Back'
+      color.bold('A.') + ' Run again',
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
 
-    if (key === 'b' || answer === '\u001b') {
-      await this.router.back();
+    if (await this.router.handleGlobalAction(key)) {
       return;
     }
 
-    if (key === 'r') {
+    if (key === 'a') {
       await this.router.back();
       return;
     }

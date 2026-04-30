@@ -53,25 +53,25 @@ export class ProjectPage {
       color,
       showProject: async (nextProjectName) => {
         await this.router.replace('project', { projectName: nextProjectName });
-      }
+      },
+      router: this.router
     });
 
     console.log('');
     itemsPanel.render(project.name);
     console.log('');
     formatActionColumns([
-      color.bold('B.') + ' Back',
       color.bold('T.') + ' ' + (hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes'),
       color.bold('D.') + ' Delete project',
-      color.bold('R.') + ' Rename project'
+      color.bold('N.') + ' Rename project',
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
 
-    if (key === 'b' || key === '\u001b') {
-      await this.router.back();
+    if (await this.router.handleGlobalAction(key)) {
       return;
     }
 
@@ -81,7 +81,7 @@ export class ProjectPage {
       return;
     }
 
-    if (key === 'r') {
+    if (key === 'n') {
       await this.editProject(project);
       return;
     }
@@ -141,28 +141,25 @@ export class ProjectPage {
     console.log(color.bold('Edit Project: ' + project.name));
     console.log('');
     console.log(color.dim('Leave a value blank to keep the current value.'));
-    console.log(color.dim('Type "q" to cancel.'));
+    console.log(color.dim('Type "b" to go back. Type "q" to quit.'));
     console.log('');
 
     const name = await promptLine('Name [' + project.name + ']: ');
 
-    if (name.trim().toLowerCase() === 'q') {
-      await this.router.replace('project', { projectName: project.name });
+    if (await this.handleEditNavigationInput(name, project.name)) {
       return;
     }
 
     const projectPath = await promptLine('Path [' + project.path + ']: ');
 
-    if (projectPath.trim().toLowerCase() === 'q') {
-      await this.router.replace('project', { projectName: project.name });
+    if (await this.handleEditNavigationInput(projectPath, project.name)) {
       return;
     }
 
     const currentShortcut = project.shortcut ?? '';
     const shortcut = await promptLine('Shortcut [' + formatShortcut(project.shortcut) + ']: ');
 
-    if (shortcut.trim().toLowerCase() === 'q') {
-      await this.router.replace('project', { projectName: project.name });
+    if (await this.handleEditNavigationInput(shortcut, project.name)) {
       return;
     }
 
@@ -189,6 +186,22 @@ export class ProjectPage {
     console.log(color.green('Project updated.'));
     await promptLine('Press Enter to continue.');
     await this.router.replace('project', { projectName: result.project.name });
+  }
+
+  async handleEditNavigationInput(value, projectName) {
+    const key = value.trim().toLowerCase();
+
+    if (key === 'q') {
+      await this.router.quit();
+      return true;
+    }
+
+    if (key === 'b') {
+      await this.router.replace('project', { projectName });
+      return true;
+    }
+
+    return false;
   }
 
   async deleteProject(project) {

@@ -30,12 +30,16 @@ export class SettingsPage {
       color.bold('L.') + ' Toggle alternate screen',
       color.bold('T.') + ' Toggle color',
       color.bold('A.') + ' AI settings',
-      color.bold('B.') + ' Back'
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
+
+    if (await this.router.handleGlobalAction(key)) {
+      return;
+    }
 
     if (key === 't') {
       await this.toggleColor(colorEnabled);
@@ -49,11 +53,6 @@ export class SettingsPage {
 
     if (key === 'a') {
       await this.router.open('aiSettings');
-      return;
-    }
-
-    if (key === 'b' || answer === '\u001b') {
-      await this.router.back();
       return;
     }
 

@@ -40,17 +40,16 @@ export class DiffPage {
     }
 
     console.log('');
-    console.log(color.bold('B.') + ' Back');
     console.log(color.bold('C.') + ' Copy full diff');
-    console.log(color.bold('S.') + ' Generate summary');
+    console.log(color.bold('G.') + ' Generate summary');
     console.log(color.bold('E.') + ' Security review');
+    this.router.globalActionItems(color).forEach((action) => console.log(action));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
 
-    if (key === 'b' || key === '\u001b') {
-      await this.router.back();
+    if (await this.router.handleGlobalAction(key)) {
       return;
     }
 
@@ -59,7 +58,7 @@ export class DiffPage {
       return;
     }
 
-    if (key === 's' && repo) {
+    if (key === 'g' && repo) {
       await this.openAiTool(repo, 'diff_summary');
       return;
     }

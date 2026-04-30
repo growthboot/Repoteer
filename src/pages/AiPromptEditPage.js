@@ -33,13 +33,17 @@ export class AiPromptEditPage {
     formatActionColumns([
       color.bold('Y.') + ' Edit system prompt',
       color.bold('P.') + ' Edit pre-prompt',
-      color.bold('R.') + ' Reset prompts',
-      color.bold('B.') + ' Back'
+      color.bold('X.') + ' Reset prompts',
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
+
+    if (await this.router.handleGlobalAction(key)) {
+      return;
+    }
 
     if (key === 'y') {
       await this.editPrompt(prompt.tool.id, 'system', 'System prompt');
@@ -51,13 +55,8 @@ export class AiPromptEditPage {
       return;
     }
 
-    if (key === 'r') {
+    if (key === 'x') {
       await this.resetPrompts(prompt.tool.id);
-      return;
-    }
-
-    if (key === 'b' || answer === '\u001b') {
-      await this.router.back();
       return;
     }
 
@@ -68,12 +67,19 @@ export class AiPromptEditPage {
     console.clear();
     console.log(this.runtime.color.bold('Edit ' + label));
     console.log('');
-    console.log(this.runtime.color.dim('Enter one line. Type "q" to cancel.'));
+    console.log(this.runtime.color.dim('Enter one line. Type "b" to go back. Type "q" to quit.'));
     console.log('');
 
     const value = await promptLine(label + ': ');
 
-    if (value.trim().toLowerCase() === 'q') {
+    const key = value.trim().toLowerCase();
+
+    if (key === 'q') {
+      await this.router.quit();
+      return;
+    }
+
+    if (key === 'b') {
       await this.router.replace('aiPromptEdit', { toolId });
       return;
     }

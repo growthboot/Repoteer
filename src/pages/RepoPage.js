@@ -53,28 +53,21 @@ export class RepoPage {
       color.bold('A.') + ' Commit review',
       color.bold('E.') + ' Security review',
       color.bold('M.') + ' Generate commit',
-      color.bold('H.') + ' Hotfix commit',
+      color.bold('F.') + ' Hotfix commit',
       color.bold('P.') + ' Write a commit & push',
-      color.bold('S.') + ' Switch branch',
-      color.bold('B.') + ' Back',
-      color.bold('R.') + ' Refresh'
+      color.bold('W.') + ' Switch branch',
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
 
-    if (key === 'b' || key === '\u001b') {
-      await this.router.back();
+    if (await this.router.handleGlobalAction(key)) {
       return;
     }
 
-    if (key === 'r') {
-      await this.router.replace('repo', this.params);
-      return;
-    }
-
-    if (key === 's') {
+    if (key === 'w') {
       await this.router.open('branch', {
         projectName: project.name,
         repoPath: repo.path
@@ -118,7 +111,7 @@ export class RepoPage {
       return;
     }
 
-    if (key === 'h') {
+    if (key === 'f') {
       const payload = this.runtime.commitManager.createHotfixPayload(repo);
       await this.openCommitConfirm(project, repo, payload, false);
       return;

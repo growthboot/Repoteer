@@ -33,15 +33,14 @@ export class CommitConfirmPage {
       color.bold('C.') + ' Confirm',
       color.bold('T.') + ' Edit title',
       color.bold('E.') + ' Edit body',
-      color.bold('B.') + ' Back / Cancel'
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
 
-    if (key === 'b' || key === '\u001b') {
-      await this.router.back();
+    if (await this.router.handleGlobalAction(key)) {
       return;
     }
 

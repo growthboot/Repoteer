@@ -47,20 +47,19 @@ export class AiProviderSelectPage {
 
     console.log('');
     formatActionColumns([
-      color.bold('S.') + ' Settings',
-      color.bold('B.') + ' Back'
+      color.bold('A.') + ' AI settings',
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
 
-    if (key === 'b' || answer === '\u001b') {
-      await this.router.back();
+    if (await this.router.handleGlobalAction(key)) {
       return;
     }
 
-    if (key === 's') {
+    if (key === 'a') {
       await this.router.open('aiSettings');
       return;
     }
@@ -218,15 +217,19 @@ export class AiProviderSelectPage {
       formatActionColumns([
         color.bold('1.') + ' Read clipboard',
         color.bold('2.') + ' Paste manually',
-        color.bold('B.') + ' Back'
+        ...this.router.globalActionItems(color)
       ]).forEach((row) => console.log(row));
       console.log('');
 
       const answer = await promptAction('Action: ');
       const key = answer.trim().toLowerCase();
 
-      if (key === 'b' || answer === '\u001b') {
+      if (key === 'b' || key === '\u001b') {
         await this.router.replace('aiProviderSelect', params);
+        return;
+      }
+
+      if (await this.router.handleGlobalAction(key)) {
         return;
       }
 

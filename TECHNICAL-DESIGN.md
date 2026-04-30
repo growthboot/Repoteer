@@ -91,7 +91,7 @@ The router owns the navigation stack.
 
 Pages should not manually import and instantiate other pages unless there is a strong reason. The router should be the single place that maps page names to page classes.
 
-Back navigation must be consistent. `B` and Escape should both return to the previous page where applicable.
+Global navigation must be consistent. `H` always jumps to Projects, `R` always refreshes the current screen, `S` always opens Settings, `Q` always quits, and `B` plus Escape should both return to the previous page where applicable.
 
 The router must not own Git state, project state, or storage state. It only controls where the user is in the CLI.
 

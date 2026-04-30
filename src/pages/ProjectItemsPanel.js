@@ -3,10 +3,11 @@ import { promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns, formatColumnPairs } from '../utils/menu.js';
 
 export class ProjectItemsPanel {
-  constructor({ runtime, color, showProject }) {
+  constructor({ runtime, color, showProject, router = null }) {
     this.runtime = runtime;
     this.color = color;
     this.showProject = showProject;
+    this.router = router;
   }
 
   render(projectName) {
@@ -17,7 +18,7 @@ export class ProjectItemsPanel {
   }
 
   async handleAction(project, key) {
-    if (key === 'ab') {
+    if (key === 'am') {
       await this.addBookmark(project);
       return true;
     }
@@ -27,7 +28,7 @@ export class ProjectItemsPanel {
       return true;
     }
 
-    const bookmarkMatch = /^b([0-9]+)$/.exec(key);
+    const bookmarkMatch = /^m([0-9]+)$/.exec(key);
 
     if (bookmarkMatch) {
       await this.showBookmark(project, Number(bookmarkMatch[1]) - 1);
@@ -52,8 +53,8 @@ export class ProjectItemsPanel {
       const bookmark = bookmarks[index] ?? null;
       const command = commands[index] ?? null;
       const left = bookmark
-        ? this.color.bold('b' + String(index + 1) + '.') + ' ' + bookmark.title
-        : index === bookmarks.length ? this.color.bold('ab.') + ' Add bookmark' : '';
+        ? this.color.bold('m' + String(index + 1) + '.') + ' ' + bookmark.title
+        : index === bookmarks.length ? this.color.bold('am.') + ' Add bookmark' : '';
       const right = command
         ? this.color.bold('c' + String(index + 1) + '.') + ' ' + command.title
         : index === commands.length ? this.color.bold('ac.') + ' Add command' : null;
@@ -68,27 +69,30 @@ export class ProjectItemsPanel {
     console.clear();
     console.log(this.color.bold('Add Bookmark: ' + project.name));
     console.log('');
-    console.log(this.color.dim('Type "q" to cancel.'));
+    console.log(this.color.dim('Type "b" to go back. Type "q" to quit.'));
     console.log('');
 
     const title = await promptLine('Title: ');
 
-    if (title.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(title, async () => {
       await this.showProject(project.name);
+    })) {
       return;
     }
 
     const target = await promptLine('URL/path: ');
 
-    if (target.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(target, async () => {
       await this.showProject(project.name);
+    })) {
       return;
     }
 
     const notes = await promptLine('Notes (optional): ');
 
-    if (notes.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(notes, async () => {
       await this.showProject(project.name);
+    })) {
       return;
     }
 
@@ -112,34 +116,38 @@ export class ProjectItemsPanel {
     console.clear();
     console.log(this.color.bold('Add Command: ' + project.name));
     console.log('');
-    console.log(this.color.dim('Type "q" to cancel.'));
+    console.log(this.color.dim('Type "b" to go back. Type "q" to quit.'));
     console.log('');
 
     const title = await promptLine('Title: ');
 
-    if (title.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(title, async () => {
       await this.showProject(project.name);
+    })) {
       return;
     }
 
     const command = await promptLine('Command: ');
 
-    if (command.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(command, async () => {
       await this.showProject(project.name);
+    })) {
       return;
     }
 
     const workingDirectory = await promptLine('Working directory [' + project.path + ']: ');
 
-    if (workingDirectory.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(workingDirectory, async () => {
       await this.showProject(project.name);
+    })) {
       return;
     }
 
     const notes = await promptLine('Notes (optional): ');
 
-    if (notes.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(notes, async () => {
       await this.showProject(project.name);
+    })) {
       return;
     }
 
@@ -190,12 +198,18 @@ export class ProjectItemsPanel {
       this.color.bold('O.') + ' Open',
       this.color.bold('E.') + ' Edit',
       this.color.bold('D.') + ' Delete',
-      this.color.bold('B.') + ' Back'
+      ...this.globalActionItems()
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
+
+    if (await this.handleGlobalAction(key, project, async () => {
+      await this.showBookmark(project, index);
+    })) {
+      return;
+    }
 
     if (key === 'o') {
       this.openTarget(bookmark.target);
@@ -218,7 +232,7 @@ export class ProjectItemsPanel {
     await this.showProject(project.name);
   }
 
-  async showCommand(project, index) {
+  async showCommand(project, index, notice = null) {
     const command = this.runtime.commandsStore.listForProject(project.name)[index] ?? null;
 
     console.clear();
@@ -240,24 +254,33 @@ export class ProjectItemsPanel {
       console.log('Notes: ' + command.notes);
     }
 
+    if (notice) {
+      console.log('');
+      console.log(notice);
+    }
+
     console.log('');
     formatActionColumns([
-      this.color.bold('R.') + ' Run',
+      this.color.bold('X.') + ' Run',
       this.color.bold('T.') + ' Open in terminal',
       this.color.bold('E.') + ' Edit',
       this.color.bold('D.') + ' Delete',
-      this.color.bold('B.') + ' Back'
+      ...this.globalActionItems()
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
 
-    if (key === 'r') {
-      this.runCommand(command);
-      console.log('');
-      await promptLine('Press Enter to continue.');
+    if (await this.handleGlobalAction(key, project, async () => {
       await this.showCommand(project, index);
+    })) {
+      return;
+    }
+
+    if (key === 'x') {
+      const notice = await this.runCommand(command);
+      await this.showCommand(project, index, notice);
       return;
     }
 
@@ -287,27 +310,30 @@ export class ProjectItemsPanel {
     console.log(this.color.bold('Edit Bookmark: ' + bookmark.title));
     console.log('');
     console.log(this.color.dim('Leave a value blank to keep the current value.'));
-    console.log(this.color.dim('Type "q" to cancel.'));
+    console.log(this.color.dim('Type "b" to go back. Type "q" to quit.'));
     console.log('');
 
     const title = await promptLine('Title [' + bookmark.title + ']: ');
 
-    if (title.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(title, async () => {
       await this.showBookmark(project, index);
+    })) {
       return;
     }
 
     const target = await promptLine('URL/path [' + bookmark.target + ']: ');
 
-    if (target.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(target, async () => {
       await this.showBookmark(project, index);
+    })) {
       return;
     }
 
     const notes = await promptLine('Notes [' + bookmark.notes + ']: ');
 
-    if (notes.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(notes, async () => {
       await this.showBookmark(project, index);
+    })) {
       return;
     }
 
@@ -328,34 +354,38 @@ export class ProjectItemsPanel {
     console.log(this.color.bold('Edit Command: ' + command.title));
     console.log('');
     console.log(this.color.dim('Leave a value blank to keep the current value.'));
-    console.log(this.color.dim('Type "q" to cancel.'));
+    console.log(this.color.dim('Type "b" to go back. Type "q" to quit.'));
     console.log('');
 
     const title = await promptLine('Title [' + command.title + ']: ');
 
-    if (title.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(title, async () => {
       await this.showCommand(project, index);
+    })) {
       return;
     }
 
     const commandText = await promptLine('Command [' + command.command + ']: ');
 
-    if (commandText.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(commandText, async () => {
       await this.showCommand(project, index);
+    })) {
       return;
     }
 
     const workingDirectory = await promptLine('Working directory [' + command.workingDirectory + ']: ');
 
-    if (workingDirectory.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(workingDirectory, async () => {
       await this.showCommand(project, index);
+    })) {
       return;
     }
 
     const notes = await promptLine('Notes [' + command.notes + ']: ');
 
-    if (notes.trim().toLowerCase() === 'q') {
+    if (await this.handleFormNavigationInput(notes, async () => {
       await this.showCommand(project, index);
+    })) {
       return;
     }
 
@@ -419,18 +449,47 @@ export class ProjectItemsPanel {
     }
   }
 
-  runCommand(command) {
-    const result = spawnSync(command.command, {
-      cwd: command.workingDirectory,
-      shell: true,
-      stdio: 'inherit'
-    });
+  async runCommand(command) {
+    const terminal = this.runtime.terminal;
 
-    if (result.error) {
-      console.log('Command failed: ' + result.error.message);
-    } else if (result.status !== 0) {
-      console.log('Command exited with status ' + String(result.status) + '.');
+    if (terminal) {
+      terminal.exitAlternateScreen();
     }
+
+    console.log(this.color.bold('Running: ' + command.title));
+    console.log('');
+    console.log('Command: ' + command.command);
+    console.log('Working directory: ' + command.workingDirectory);
+    console.log('');
+
+    let result = null;
+    let notice = this.color.green('Command finished.');
+
+    try {
+      result = spawnSync(command.command, {
+        cwd: command.workingDirectory,
+        shell: true,
+        stdio: 'inherit'
+      });
+    } catch (error) {
+      notice = this.color.yellow('Command failed: ' + error.message);
+    }
+
+    if (result) {
+      if (result.error) {
+        notice = this.color.yellow('Command failed: ' + result.error.message);
+      } else if (result.signal) {
+        notice = this.color.yellow('Command stopped by signal ' + result.signal + '.');
+      } else if (result.status !== 0) {
+        notice = this.color.yellow('Command exited with status ' + String(result.status) + '.');
+      }
+    }
+
+    if (terminal) {
+      terminal.enterAlternateScreen();
+    }
+
+    return notice;
   }
 
   openCommandInTerminal(command) {
@@ -503,6 +562,56 @@ export class ProjectItemsPanel {
     return {
       error: new Error('No terminal opener found. Set $TERMINAL to your terminal executable.')
     };
+  }
+
+  globalActionItems() {
+    if (this.router) {
+      return this.router.globalActionItems(this.color);
+    }
+
+    return [
+      this.color.bold('H.') + ' Home',
+      this.color.bold('R.') + ' Refresh',
+      this.color.bold('S.') + ' Settings',
+      this.color.bold('Q.') + ' Quit',
+      this.color.bold('B.') + ' Back'
+    ];
+  }
+
+  async handleGlobalAction(key, project, refresh) {
+    if (key === 'b' || key === '\u001b') {
+      await this.showProject(project.name);
+      return true;
+    }
+
+    if (key === 'r') {
+      await refresh();
+      return true;
+    }
+
+    if (this.router && await this.router.handleGlobalAction(key)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  async handleFormNavigationInput(value, back) {
+    const key = value.trim().toLowerCase();
+
+    if (key === 'q') {
+      if (this.router) {
+        await this.router.quit();
+      }
+      return true;
+    }
+
+    if (key === 'b') {
+      await back();
+      return true;
+    }
+
+    return false;
   }
 }
 

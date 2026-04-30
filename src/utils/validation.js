@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const RESERVED_SHORTCUTS = new Set(['a', 'b', 'd', 'q', 'r', 's', 't', 'v']);
+const RESERVED_SHORTCUTS = new Set(['a', 'b', 'd', 'h', 'q', 'r', 's', 't', 'v']);
 
 export function validateProjectInput(input) {
   const name = input.name.trim();

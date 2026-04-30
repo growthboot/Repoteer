@@ -37,12 +37,16 @@ export class AiSettingsPage {
       color.bold('A.') + ' Add browser URL',
       color.bold('L.') + ' Add local model',
       color.bold('E.') + ' Edit provider',
-      color.bold('B.') + ' Back'
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
+
+    if (await this.router.handleGlobalAction(key)) {
+      return;
+    }
 
     if (key === 'g') {
       await this.setGlobalMaxPromptCharacters();
@@ -82,11 +86,6 @@ export class AiSettingsPage {
       return;
     }
 
-    if (key === 'b' || answer === '\u001b') {
-      await this.router.back();
-      return;
-    }
-
     await this.router.replace('aiSettings');
   }
 
@@ -114,8 +113,7 @@ export class AiSettingsPage {
     const current = this.runtime.settings.ai.globalMaxPromptCharacters;
     const value = await promptLine('Global max prompt size [' + String(current) + ']: ');
 
-    if (this.isCancel(value)) {
-      await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(value)) {
       return;
     }
 
@@ -140,20 +138,20 @@ export class AiSettingsPage {
     console.clear();
     console.log(this.runtime.color.bold('Add Browser AI Provider'));
     console.log('');
-    console.log(this.runtime.color.dim('Type "q" to cancel.'));
+    console.log(this.runtime.color.dim('Type "b" to go back. Type "q" to quit.'));
     console.log('');
 
     const title = await promptLine('Title: ');
-    if (this.isCancel(title)) return await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(title)) return;
 
     const url = await promptLine('URL: ');
-    if (this.isCancel(url)) return await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(url)) return;
 
     const priority = await promptLine('Priority [60]: ');
-    if (this.isCancel(priority)) return await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(priority)) return;
 
     const maxPromptCharacters = await promptLine('Max prompt size [' + String(this.runtime.settings.ai.globalMaxPromptCharacters) + ']: ');
-    if (this.isCancel(maxPromptCharacters)) return await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(maxPromptCharacters)) return;
 
     if (!title.trim()) {
       await this.showWarning('Provider title is required.');
@@ -193,23 +191,23 @@ export class AiSettingsPage {
     console.clear();
     console.log(this.runtime.color.bold('Add Local AI Provider'));
     console.log('');
-    console.log(this.runtime.color.dim('Type "q" to cancel.'));
+    console.log(this.runtime.color.dim('Type "b" to go back. Type "q" to quit.'));
     console.log('');
 
     const title = await promptLine('Title: ');
-    if (this.isCancel(title)) return await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(title)) return;
 
     const endpointUrl = await promptLine('Endpoint URL: ');
-    if (this.isCancel(endpointUrl)) return await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(endpointUrl)) return;
 
     const model = await promptLine('Model (optional): ');
-    if (this.isCancel(model)) return await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(model)) return;
 
     const priority = await promptLine('Priority [60]: ');
-    if (this.isCancel(priority)) return await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(priority)) return;
 
     const maxPromptCharacters = await promptLine('Max prompt size [' + String(this.runtime.settings.ai.globalMaxPromptCharacters) + ']: ');
-    if (this.isCancel(maxPromptCharacters)) return await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(maxPromptCharacters)) return;
 
     if (!title.trim()) {
       await this.showWarning('Provider title is required.');
@@ -249,8 +247,7 @@ export class AiSettingsPage {
   async openProviderEdit(providers) {
     const answer = await promptLine('Provider number: ');
 
-    if (this.isCancel(answer)) {
-      await this.router.replace('aiSettings');
+    if (await this.handleFormNavigationInput(answer)) {
       return;
     }
 
@@ -286,8 +283,20 @@ export class AiSettingsPage {
     return provider.url || 'No URL';
   }
 
-  isCancel(value) {
-    return value.trim().toLowerCase() === 'q';
+  async handleFormNavigationInput(value) {
+    const key = value.trim().toLowerCase();
+
+    if (key === 'q') {
+      await this.router.quit();
+      return true;
+    }
+
+    if (key === 'b') {
+      await this.router.replace('aiSettings');
+      return true;
+    }
+
+    return false;
   }
 
   isHttpUrl(value) {
@@ -316,7 +325,7 @@ export class AiSettingsPage {
     }
 
     if (toolId === 'security_review') {
-      return 's';
+      return 'v';
     }
 
     return '';

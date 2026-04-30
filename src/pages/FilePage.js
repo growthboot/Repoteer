@@ -61,21 +61,14 @@ export class FilePage {
     formatActionColumns([
       color.bold('C.') + ' Copy file diff',
       color.bold('D.') + ' Discard file changes',
-      color.bold('R.') + ' Refresh',
-      color.bold('B.') + ' Back'
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
 
-    if (key === 'b' || key === '\u001b') {
-      await this.router.back();
-      return;
-    }
-
-    if (key === 'r') {
-      await this.router.replace('file', this.params);
+    if (await this.router.handleGlobalAction(key)) {
       return;
     }
 

@@ -7,6 +7,7 @@ import { Scanner } from '../src/modules/Scanner.js';
 import { Router } from '../src/router/Router.js';
 import { DiffPage } from '../src/pages/DiffPage.js';
 import { FilePage } from '../src/pages/FilePage.js';
+import { ProjectItemsPanel } from '../src/pages/ProjectItemsPanel.js';
 import { AiGateway } from '../src/modules/AiGateway.js';
 import { AiPromptManager } from '../src/modules/AiPromptManager.js';
 import { AiDiffBuilder } from '../src/modules/AiDiffBuilder.js';
@@ -341,7 +342,7 @@ function smokeAiPromptEditingPath() {
     's',
     'a',
     'c',
-    'r',
+    'x',
     'yes',
     '',
     'b',
@@ -501,7 +502,7 @@ function smokeAiProviderSelectWarningPath() {
 }
 
 function smokeAiLocalProviderSuccessPath() {
-  const result = runAiLocalProviderScenario('success', ['1', 'yes', 'c', '', 'r', 'b'].join('\n') + '\n');
+  const result = runAiLocalProviderScenario('success', ['1', 'yes', 'c', '', 'a', 'b'].join('\n') + '\n');
 
   assert(result.status === 0, result.stderr || 'AI local provider success path failed');
   assert(result.stdout.includes('Enabled Local'), 'local provider picker should render enabled local provider');
@@ -554,7 +555,7 @@ function smokeAiLocalProviderConnectionFailurePath() {
 }
 
 function smokeAiProviderSelectSettingsPath() {
-  const result = runAiProviderSelectScenario('success', ['s', 'b', 'b'].join('\n') + '\n');
+  const result = runAiProviderSelectScenario('success', ['a', 'b', 'b'].join('\n') + '\n');
 
   assert(result.status === 0, result.stderr || 'AI provider select settings path failed');
   assert(result.stdout.includes('AI Settings'), 'AI provider select should open AI settings');
@@ -1094,7 +1095,7 @@ function smokeAddProjectPath() {
 function smokeAddProjectCancelPath() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-project-'));
-  const input = ['a', 'q', 'q'].join('\n') + '\n';
+  const input = ['a', 'b', 'q'].join('\n') + '\n';
   const result = runApp(input, home);
 
   assert(result.status === 0, result.stderr || 'add project cancel path failed');
@@ -1387,7 +1388,7 @@ function smokeProjectPageEditProjectPath() {
     { name: 'Edit Project', path: originalProjectPath, shortcut: null }
   ], null, 2) + '\n');
 
-  const input = ['1', 'r', 'Renamed Project', renamedProjectPath, 'z', '', 'b', 'q'].join('\n') + '\n';
+  const input = ['1', 'n', 'Renamed Project', renamedProjectPath, 'z', '', 'b', 'q'].join('\n') + '\n';
   const result = runApp(input, home);
 
   assert(result.status === 0, result.stderr || 'project page edit path failed');
@@ -1437,7 +1438,7 @@ function smokeProjectItemsPath() {
 
   const addInput = [
     '1',
-    'ab',
+    'am',
     'Dashboard',
     'https://example.com/dashboard',
     'Project dashboard',
@@ -1456,11 +1457,11 @@ function smokeProjectItemsPath() {
   assert(addResult.status === 0, addResult.stderr || 'project items add path failed');
   assert(addResult.stdout.includes('Bookmarks'), 'project items add path did not render bookmarks header');
   assert(addResult.stdout.includes('Commands'), 'project items add path did not render commands header');
-  assert(addResult.stdout.includes('ab. Add bookmark'), 'project items add path did not render add bookmark action');
+  assert(addResult.stdout.includes('am. Add bookmark'), 'project items add path did not render add bookmark action');
   assert(addResult.stdout.includes('ac. Add command'), 'project items add path did not render add command action');
   assert(addResult.stdout.includes('Bookmark saved.'), 'project items add path did not save bookmark');
   assert(addResult.stdout.includes('Command saved.'), 'project items add path did not save command');
-  assert(addResult.stdout.includes('b1. Dashboard'), 'project items add path did not render saved bookmark');
+  assert(addResult.stdout.includes('m1. Dashboard'), 'project items add path did not render saved bookmark');
   assert(addResult.stdout.includes('c1. project cli'), 'project items add path did not render saved command');
 
   const bookmarks = readBookmarks(home);
@@ -1478,11 +1479,11 @@ function smokeProjectItemsPath() {
 
   const detailInput = [
     '1',
-    'b1',
+    'm1',
     'b',
     'c1',
     'b',
-    'b1',
+    'm1',
     'd',
     'yes',
     '',
@@ -1506,6 +1507,43 @@ function smokeProjectItemsPath() {
   assert(detailResult.stdout.includes('Command deleted.'), 'command detail path did not delete command');
   assert(readBookmarks(home).length === 0, 'project items should delete bookmark');
   assert(readCommands(home).length === 0, 'project items should delete command');
+}
+
+async function smokeProjectCommandRunTerminalModePath() {
+  const calls = [];
+  const panel = new ProjectItemsPanel({
+    runtime: {
+      terminal: {
+        exitAlternateScreen() {
+          calls.push('exit');
+        },
+        enterAlternateScreen() {
+          calls.push('enter');
+        }
+      }
+    },
+    color: {
+      bold(value) {
+        return value;
+      },
+      green(value) {
+        return value;
+      },
+      yellow(value) {
+        return value;
+      }
+    },
+    showProject() {}
+  });
+
+  const notice = await panel.runCommand({
+    title: 'smoke command',
+    command: JSON.stringify(process.execPath) + ' -e "process.exit(0)"',
+    workingDirectory: root
+  });
+
+  assert(calls.join(',') === 'exit,enter', 'command run should leave and restore alternate screen');
+  assert(notice === 'Command finished.', 'command run should report success after returning');
 }
 
 function smokeScannerMissingProjectPath() {
@@ -1783,7 +1821,7 @@ function smokeRepoPageOpenAndDiffPath() {
   assert(result.status === 0, result.stderr || 'repo page open and diff path failed');
   assert(result.stdout.includes('Repo: Repo Page Project / frontend'), 'repo page should render selected repo title');
   assert(result.stdout.includes('V. View full diff'), 'repo page should render view diff action');
-  assert(result.stdout.includes('H. Hotfix commit'), 'repo page should render hotfix action');
+  assert(result.stdout.includes('F. Hotfix commit'), 'repo page should render hotfix action');
   assert(result.stdout.includes('Repo: frontend (diff)'), 'diff page should render title');
   assert(result.stdout.includes('+const next = 2;'), 'diff page should render changed line');
 }
@@ -1833,7 +1871,7 @@ function smokeAiToolEntryPointsPath() {
     'e',
     'b',
     'v',
-    's',
+    'g',
     'b',
     'e',
     'b',
@@ -1847,7 +1885,7 @@ function smokeAiToolEntryPointsPath() {
   assert(result.status === 0, result.stderr || 'AI tool entry points path failed');
   assert(result.stdout.includes('A. Commit review'), 'repo page should render commit review AI action');
   assert(result.stdout.includes('E. Security review'), 'repo or diff page should render security review AI action');
-  assert(result.stdout.includes('S. Generate summary'), 'diff page should render diff summary AI action');
+  assert(result.stdout.includes('G. Generate summary'), 'diff page should render diff summary AI action');
   assert(result.stdout.includes('AI: Commit review'), 'commit review action should open AI provider selection');
   assert(result.stdout.includes('AI: Diff summary'), 'diff summary action should open AI provider selection');
   assert(result.stdout.includes('AI: Security review'), 'security review action should open AI provider selection');
@@ -1922,7 +1960,7 @@ function smokeRepoHotfixConfirmPath() {
     { name: 'Hotfix Project', path: projectPath, shortcut: null }
   ], null, 2) + '\n');
 
-  const result = runApp(['1', '1', 'h', 'c', '', 'b', 'b', 'q'].join('\n') + '\n', home);
+  const result = runApp(['1', '1', 'f', 'c', '', 'b', 'b', 'q'].join('\n') + '\n', home);
   const log = spawnSync('git', ['log', '-1', '--format=%s%n%b'], {
     cwd: repoPath,
     encoding: 'utf8'
@@ -2023,13 +2061,13 @@ function smokeBranchSwitchPath() {
     { name: 'Branch Project', path: projectPath, shortcut: null }
   ], null, 2) + '\n');
 
-  const result = runApp(['1', '1', 's', 'feature', '', 'b', 'b', 'q'].join('\n') + '\n', home);
+  const result = runApp(['1', '1', 'w', 'feature', '', 'b', 'b', 'q'].join('\n') + '\n', home);
   const current = git.getCurrentBranch(repoPath);
 
   assert(initialBranch.ok, initialBranch.warning || 'initial branch should be available');
   assert(result.status === 0, result.stderr || 'branch switch path failed');
   assert(result.stdout.includes('Branch: ' + initialBranch.branch), 'repo page should render active branch');
-  assert(result.stdout.includes('S. Switch branch'), 'repo page should render switch branch action');
+  assert(result.stdout.includes('W. Switch branch'), 'repo page should render switch branch action');
   assert(result.stdout.includes('Switch Branch: Branch Project / frontend'), 'branch page should render title');
   assert(result.stdout.includes('Current branch: ' + initialBranch.branch), 'branch page should render current branch');
   assert(result.stdout.includes('feature'), 'branch page should list existing local branch');
@@ -2061,7 +2099,7 @@ function smokeDirtyBranchSwitchWarningPath() {
     { name: 'Dirty Branch Project', path: projectPath, shortcut: null }
   ], null, 2) + '\n');
 
-  const result = runApp(['1', '1', 's', 'feature', 'no', '', 'b', 'b', 'b', 'q'].join('\n') + '\n', home);
+  const result = runApp(['1', '1', 'w', 'feature', 'no', '', 'b', 'b', 'b', 'q'].join('\n') + '\n', home);
   const current = git.getCurrentBranch(repoPath);
 
   assert(initialBranch.ok, initialBranch.warning || 'initial dirty branch should be available');
@@ -2136,6 +2174,7 @@ smokeProjectPageHideReposWithoutLineChangesPath();
 smokeProjectPageEditProjectPath();
 smokeProjectPageDeleteProjectPath();
 smokeProjectItemsPath();
+await smokeProjectCommandRunTerminalModePath();
 smokeScannerMissingProjectPath();
 smokeDiffFormatting();
 smokeDiffPagesUseNormalScroll();

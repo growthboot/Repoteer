@@ -40,17 +40,16 @@ export class ArchivePage {
 
     console.log('');
     formatActionColumns([
-      'B. Back',
       '[0-9]U. Unarchive project',
-      '[0-9]D. Delete project'
+      '[0-9]D. Delete project',
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
 
-    if (key === 'b' || key === '\u001b') {
-      await this.router.replace('projects');
+    if (await this.router.handleGlobalAction(key)) {
       return;
     }
 

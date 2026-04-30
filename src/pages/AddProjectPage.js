@@ -12,7 +12,7 @@ export class AddProjectPage {
     console.clear();
     console.log(color.bold('Add Project'));
     console.log('');
-    console.log(color.dim('Type "q" to cancel.'));
+    console.log(color.dim('Type "b" to go back. Type "q" to quit.'));
     console.log('');
 
     const name = await this.ask('Name: ');
@@ -46,8 +46,14 @@ export class AddProjectPage {
 
   async ask(label) {
     const value = await promptLine(label);
+    const key = value.trim().toLowerCase();
 
-    if (value.trim().toLowerCase() === 'q') {
+    if (key === 'q') {
+      await this.router.quit();
+      return null;
+    }
+
+    if (key === 'b') {
       await this.router.back();
       return null;
     }

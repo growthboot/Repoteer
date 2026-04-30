@@ -34,19 +34,21 @@ export class ProjectsPage {
     console.log('');
     formatActionColumns([
       'T. ' + (hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes'),
-      'R. Refresh',
       'A. Add project',
       'V. View archive',
       '[0-9]P. Pin/unpin project',
       '[0-9]A. Archive project',
-      'S. Settings',
-      'Q. Quit'
+      ...this.router.globalActionItems(color, { back: false })
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
 
     const key = answer.trim().toLowerCase();
+
+    if (await this.router.handleGlobalAction(key)) {
+      return;
+    }
 
     if (key === 'a') {
       await this.router.open('addProject');
@@ -58,23 +60,9 @@ export class ProjectsPage {
       return;
     }
 
-    if (key === 's') {
-      await this.router.open('settings');
-      return;
-    }
-
     if (key === 't') {
       this.runtime.projectsPageHideClean = !hideCleanProjects;
       await this.router.replace('projects');
-      return;
-    }
-
-    if (key === 'r') {
-      await this.router.replace('projects');
-      return;
-    }
-
-    if (key === 'q') {
       return;
     }
 
@@ -177,7 +165,8 @@ export class ProjectsPage {
       color,
       showProject: async (nextProjectName) => {
         await this.showProject(nextProjectName);
-      }
+      },
+      router: this.router
     });
 
     console.log('');
@@ -187,7 +176,8 @@ export class ProjectsPage {
       color.bold('B.') + ' Back',
       color.bold('T.') + ' ' + (hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes'),
       color.bold('D.') + ' Delete project',
-      color.bold('R.') + ' Rename project'
+      color.bold('N.') + ' Rename project',
+      ...this.router.globalActionItems(color, { back: false })
     ]).forEach((row) => console.log(row));
     console.log('');
 
@@ -199,13 +189,17 @@ export class ProjectsPage {
       return;
     }
 
+    if (await this.router.handleGlobalAction(key)) {
+      return;
+    }
+
     if (key === 't') {
       this.runtime.projectsPageHideReposWithoutLineChanges = !hideReposWithoutLineChanges;
       await this.showProject(project.name);
       return;
     }
 
-    if (key === 'r') {
+    if (key === 'n') {
       await this.editProject(project);
       return;
     }
@@ -229,28 +223,25 @@ export class ProjectsPage {
     console.log(color.bold('Edit Project: ' + project.name));
     console.log('');
     console.log(color.dim('Leave a value blank to keep the current value.'));
-    console.log(color.dim('Type "q" to cancel.'));
+    console.log(color.dim('Type "b" to go back. Type "q" to quit.'));
     console.log('');
 
     const name = await promptLine('Name [' + project.name + ']: ');
 
-    if (name.trim().toLowerCase() === 'q') {
-      await this.showProject(project.name);
+    if (await this.handleEditNavigationInput(name, project.name)) {
       return;
     }
 
     const projectPath = await promptLine('Path [' + project.path + ']: ');
 
-    if (projectPath.trim().toLowerCase() === 'q') {
-      await this.showProject(project.name);
+    if (await this.handleEditNavigationInput(projectPath, project.name)) {
       return;
     }
 
     const currentShortcut = project.shortcut ?? '';
     const shortcut = await promptLine('Shortcut [' + formatShortcut(project.shortcut) + ']: ');
 
-    if (shortcut.trim().toLowerCase() === 'q') {
-      await this.showProject(project.name);
+    if (await this.handleEditNavigationInput(shortcut, project.name)) {
       return;
     }
 
@@ -276,6 +267,22 @@ export class ProjectsPage {
     console.log(color.green('Project updated.'));
     await promptLine('Press Enter to continue.');
     await this.showProject(result.project.name);
+  }
+
+  async handleEditNavigationInput(value, projectName) {
+    const key = value.trim().toLowerCase();
+
+    if (key === 'q') {
+      await this.router.quit();
+      return true;
+    }
+
+    if (key === 'b') {
+      await this.showProject(projectName);
+      return true;
+    }
+
+    return false;
   }
 
   async deleteProject(project) {

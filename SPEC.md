@@ -37,6 +37,8 @@ Projects
 
 A. Add project
 V. View archive
+H. Home
+R. Refresh
 S. Settings
 Q. Quit
 ```
@@ -58,6 +60,10 @@ Actions:
 * `[0-9]+a` → archive project
 * `A` → add project
 * `V` → view archive
+* `H` → jump to Projects
+* `R` → refresh the current screen
+* `S` → open Settings
+* `Q` → quit Repoteer
 * `D` → delete project (with confirmation)
 * `Q` → quit
 
@@ -97,12 +103,14 @@ Project: AppVideoStudio
 
 Bookmarks                           Commands
 
-b1. Dashboard                       c1. project cli
-b2. Dev homepage                    ac. Add command
-ab. Add bookmark
+m1. Dashboard                       c1. project cli
+m2. Dev homepage                    ac. Add command
+am. Add bookmark
 
-B. Back                             T. Toggle dirty repos               
-D. Delete project                   R. Rename project
+T. Toggle dirty repos               D. Delete project
+N. Rename project                   H. Home
+R. Refresh                          S. Settings
+Q. Quit                             B. Back
 ```
 
 Rules:
@@ -120,7 +128,7 @@ Actions:
 
 * [0-9]+ → open repo menu
 * `D` → delete project (confirm)
-* `R` → rename project (ensure no duplciation)
+* `N` → rename project (ensure no duplciation)
 
 ---
 
@@ -136,9 +144,11 @@ Repo: AppVideoStudio / frontend
 Actions:
 
 V. View full diff               C. Copy full diff
-M. Generate commit              H. Hotfix commit
-P. Write a commit & push        B. Back
-R. Refresh
+M. Generate commit              F. Hotfix commit
+P. Write a commit & push        W. Switch branch
+H. Home                         R. Refresh
+S. Settings                     Q. Quit
+B. Back
 ```
 
 Rules:
@@ -162,7 +172,7 @@ The confirmation step shows:
 
 No commit action may run directly from the Repo Screen.
 
-`H. Hotfix commit` opens the confirmation step with a generated hotfix title and default message.
+`F. Hotfix commit` opens the confirmation step with a generated hotfix title and default message.
 
 `P. Write a commit & push` should be treated as two phases that can be canceled along the way
 
@@ -207,7 +217,11 @@ Repo: frontend (diff)
 
 B. Back
 C. Copy full diff
-S. Generate summary
+G. Generate summary
+H. Home
+R. Refresh
+S. Settings
+Q. Quit
 ```
 
 Rules:
@@ -294,9 +308,13 @@ Archived Projects
 1. OldClient           /Users/me/dev/OldClient
 2. Prototype           /Users/me/dev/Prototype
 
-B. Back
 D. Delete project
 U. Unarchive project
+H. Home
+R. Refresh
+S. Settings
+Q. Quit
+B. Back
 ```
 
 Rules:
@@ -351,9 +369,13 @@ Display format:
 * No nested command chains
 * Always provide a visible way to go back (`B`) or Escape key
 * No hidden commands
-* Key bindings are screen-local unless explicitly marked global.
-* The same key may be reused on different screens when the action is clear from the visible menu.
-* Global keys are reserved for universal navigation only, such as `B`, `Esc`, and `Q` where applicable.
+* `H` is always Home and jumps to the Projects screen.
+* `R` is always Refresh for the current screen.
+* `S` is always Settings.
+* `Q` is always Quit.
+* `B` is always Back, and Escape should follow Back where applicable.
+* Global keys are reserved for universal navigation only and must not be reused for screen-local actions.
+* Screen-local keys may be reused only when they do not conflict with the global keys above.
 
 ---
 

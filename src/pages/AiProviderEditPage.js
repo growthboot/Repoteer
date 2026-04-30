@@ -47,6 +47,10 @@ export class AiProviderEditPage {
       return;
     }
 
+    if (await this.router.handleGlobalAction(key)) {
+      return;
+    }
+
     if (key === 't') {
       await this.updateProvider(provider, { enabled: !provider.enabled }, 'Provider updated.');
       return;
@@ -74,11 +78,6 @@ export class AiProviderEditPage {
 
     if (key === 'm') {
       await this.changeMaxPromptCharacters(provider);
-      return;
-    }
-
-    if (key === 'b' || answer === '\u001b') {
-      await this.router.back();
       return;
     }
 
@@ -201,7 +200,7 @@ export class AiProviderEditPage {
     actions.push(
       color.bold('P.') + ' Change priority',
       color.bold('M.') + ' Change max prompt size',
-      color.bold('B.') + ' Back'
+      ...this.router.globalActionItems(color)
     );
 
     return actions;
@@ -210,7 +209,7 @@ export class AiProviderEditPage {
   async changeTitle(provider) {
     const value = await promptLine('Title [' + provider.title + ']: ');
 
-    if (this.isCancel(value) || !value.trim()) {
+    if (await this.handleFormNavigationInput(value, provider.id) || !value.trim()) {
       await this.router.replace('aiProviderEdit', { providerId: provider.id });
       return;
     }
@@ -223,7 +222,7 @@ export class AiProviderEditPage {
     const current = provider.type === 'local' ? provider.endpointUrl : provider.url;
     const value = await promptLine(label + ' [' + current + ']: ');
 
-    if (this.isCancel(value) || !value.trim()) {
+    if (await this.handleFormNavigationInput(value, provider.id) || !value.trim()) {
       await this.router.replace('aiProviderEdit', { providerId: provider.id });
       return;
     }
@@ -243,8 +242,7 @@ export class AiProviderEditPage {
   async changeModel(provider) {
     const value = await promptLine('Model [' + (provider.model || '') + ']: ');
 
-    if (this.isCancel(value)) {
-      await this.router.replace('aiProviderEdit', { providerId: provider.id });
+    if (await this.handleFormNavigationInput(value, provider.id)) {
       return;
     }
 
@@ -254,7 +252,7 @@ export class AiProviderEditPage {
   async changePriority(provider) {
     const value = await promptLine('Priority [' + String(provider.priority) + ']: ');
 
-    if (this.isCancel(value) || !value.trim()) {
+    if (await this.handleFormNavigationInput(value, provider.id) || !value.trim()) {
       await this.router.replace('aiProviderEdit', { providerId: provider.id });
       return;
     }
@@ -270,7 +268,7 @@ export class AiProviderEditPage {
   async changeMaxPromptCharacters(provider) {
     const value = await promptLine('Max prompt size [' + String(provider.maxPromptCharacters) + ']: ');
 
-    if (this.isCancel(value) || !value.trim()) {
+    if (await this.handleFormNavigationInput(value, provider.id) || !value.trim()) {
       await this.router.replace('aiProviderEdit', { providerId: provider.id });
       return;
     }
@@ -303,8 +301,20 @@ export class AiProviderEditPage {
     return type === 'local' ? 'Local' : 'Browser';
   }
 
-  isCancel(value) {
-    return value.trim().toLowerCase() === 'q';
+  async handleFormNavigationInput(value, providerId) {
+    const key = value.trim().toLowerCase();
+
+    if (key === 'q') {
+      await this.router.quit();
+      return true;
+    }
+
+    if (key === 'b') {
+      await this.router.replace('aiProviderEdit', { providerId });
+      return true;
+    }
+
+    return false;
   }
 
   isHttpUrl(value) {

@@ -47,15 +47,14 @@ export class BranchPage {
 
     console.log('');
     formatActionColumns([
-      color.bold('B.') + ' Back'
+      ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Branch number/name: ');
     const key = answer.trim();
 
-    if (key.toLowerCase() === 'b' || key === '\u001b') {
-      await this.router.back();
+    if (await this.router.handleGlobalAction(key)) {
       return;
     }
 
