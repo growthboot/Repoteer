@@ -17,6 +17,7 @@ export class DiffPage {
     const repo = this.findRepo();
     const title = repo ? repo.name : 'repo';
 
+    this.runtime.terminal?.clearScreen();
     console.clear();
     console.log(color.bold('Repo: ' + title + ' (diff)'));
     console.log('');
