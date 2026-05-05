@@ -17,7 +17,18 @@ export class ProjectsPage {
     console.log(color.bold('Repoteer'));
     console.log('');
 
-    const snapshot = this.runtime.refreshSnapshot();
+    let didRenderProgress = false;
+    const snapshot = this.runtime.refreshSnapshot({
+      onProgress: (progress) => {
+        didRenderProgress = this.renderLoadingProgress(progress) || didRenderProgress;
+      }
+    });
+
+    if (didRenderProgress) {
+      console.clear();
+      console.log(color.bold('Repoteer'));
+      console.log('');
+    }
     const hideCleanProjects = this.runtime.projectsPageHideClean === true;
     const orderedProjects = this.orderProjects(snapshot.projects);
     const projects = hideCleanProjects ? orderedProjects.filter((project) => {
@@ -426,6 +437,42 @@ export class ProjectsPage {
     const value = prefix + String(project.totals.net);
 
     return project.totals.net < 0 ? color.red(value) : color.green(value);
+  }
+
+  renderLoadingProgress(progress) {
+    if (!this.shouldRenderLoadingProgress()) {
+      return false;
+    }
+
+    const color = this.runtime.color;
+    const percent = Math.max(0, Math.min(100, progress.percent));
+    const item = progress.projectName
+      ? 'Loading project: ' + color.yellow(progress.projectName)
+      : 'Loading projects...';
+
+    console.clear();
+    console.log(color.bold('Repoteer'));
+    console.log('');
+    console.log(color.dim('Scanning projects'));
+    console.log('');
+    console.log(this.formatLoadingBar(percent) + ' ' + color.green(String(percent).padStart(3, ' ') + '%'));
+    console.log(color.dim(item));
+
+    return true;
+  }
+
+  shouldRenderLoadingProgress() {
+    return process.stdout.isTTY === true && process.stdin.isTTY === true;
+  }
+
+  formatLoadingBar(percent) {
+    const color = this.runtime.color;
+    const width = 30;
+    const filled = Math.round((percent / 100) * width);
+    const empty = width - filled;
+    const bar = color.green('='.repeat(filled)) + color.dim('-'.repeat(empty));
+
+    return '[' + bar + ']';
   }
 
   formatLastCommit(project) {

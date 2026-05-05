@@ -6,9 +6,42 @@ export class Scanner {
     this.git = git;
   }
 
-  scanProjects(projects) {
+  scanProjects(projects, options = {}) {
+    const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+    const scannedProjects = [];
+    const total = projects.length;
+
+    if (total === 0) {
+      onProgress?.({
+        current: 0,
+        total,
+        projectName: null,
+        percent: 100
+      });
+
+      return { projects: scannedProjects };
+    }
+
+    projects.forEach((project, index) => {
+      onProgress?.({
+        current: index,
+        total,
+        projectName: project.name,
+        percent: Math.floor((index / total) * 100)
+      });
+
+      scannedProjects.push(this.scanProject(project));
+
+      onProgress?.({
+        current: index + 1,
+        total,
+        projectName: project.name,
+        percent: Math.floor(((index + 1) / total) * 100)
+      });
+    });
+
     return {
-      projects: projects.map((project) => this.scanProject(project))
+      projects: scannedProjects
     };
   }
 

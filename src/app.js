@@ -19,6 +19,7 @@ import { SettingsStore } from './storage/SettingsStore.js';
 import { PromptsStore } from './storage/PromptsStore.js';
 import { BookmarksStore } from './storage/BookmarksStore.js';
 import { CommandsStore } from './storage/CommandsStore.js';
+import { ClipboardItemsStore } from './storage/ClipboardItemsStore.js';
 import { ProjectManager } from './modules/ProjectManager.js';
 import { CommitManager } from './modules/CommitManager.js';
 import { BranchManager } from './modules/BranchManager.js';
@@ -42,6 +43,7 @@ export async function main(argv = process.argv.slice(2)) {
   const promptsStore = new PromptsStore(paths.storageDir);
   const bookmarksStore = new BookmarksStore(paths.storageDir);
   const commandsStore = new CommandsStore(paths.storageDir);
+  const clipboardItemsStore = new ClipboardItemsStore(paths.storageDir);
   const settings = settingsStore.get();
   const projectManager = new ProjectManager(projectsStore);
   const git = new Git();
@@ -71,6 +73,7 @@ export async function main(argv = process.argv.slice(2)) {
     projectsStore,
     bookmarksStore,
     commandsStore,
+    clipboardItemsStore,
     projectManager,
     git,
     commitManager,
@@ -86,8 +89,8 @@ export async function main(argv = process.argv.slice(2)) {
     color,
     projectsPageHideClean: false,
     snapshot: { projects: [] },
-    refreshSnapshot() {
-      this.snapshot = this.scanner.scanProjects(this.projectManager.listActiveProjects());
+    refreshSnapshot(options = {}) {
+      this.snapshot = this.scanner.scanProjects(this.projectManager.listActiveProjects(), options);
       return this.snapshot;
     },
     refreshColor() {
@@ -101,8 +104,6 @@ export async function main(argv = process.argv.slice(2)) {
   terminal.enterAlternateScreen();
 
   try {
-    runtime.refreshSnapshot();
-
     const router = new Router(runtime, {
       projects: ProjectsPage,
       archive: ArchivePage,
