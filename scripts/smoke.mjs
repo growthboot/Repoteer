@@ -8,6 +8,7 @@ import { Router } from '../src/router/Router.js';
 import { DiffPage } from '../src/pages/DiffPage.js';
 import { FilePage } from '../src/pages/FilePage.js';
 import { ProjectItemsPanel } from '../src/pages/ProjectItemsPanel.js';
+import { ProjectPage } from '../src/pages/ProjectPage.js';
 import { AiGateway } from '../src/modules/AiGateway.js';
 import { AiPromptManager } from '../src/modules/AiPromptManager.js';
 import { AiDiffBuilder } from '../src/modules/AiDiffBuilder.js';
@@ -104,14 +105,15 @@ function readGitState(repoPath) {
   };
 }
 
-function runApp(input, home, args = []) {
+function runApp(input, home, args = [], env = {}) {
   return spawnSync(process.execPath, ['src/app.js', ...args], {
     cwd: root,
     input,
     encoding: 'utf8',
     env: {
       ...process.env,
-      HOME: home
+      HOME: home,
+      ...env
     }
   });
 }
@@ -1378,6 +1380,43 @@ function smokeProjectPageHideReposWithoutLineChangesPath() {
   assert(filteredReposScreen.includes('dirty-repo'), 'project page should keep dirty repo after toggle');
 }
 
+function smokeProjectPageCopyProjectPathPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-copy-project-path-'));
+  const storageDir = path.join(home, '.repoteer', 'storage');
+  const fakeBin = path.join(home, 'fake-bin');
+  const clipboardFile = path.join(home, 'clipboard.txt');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Copy Path Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+  fs.mkdirSync(fakeBin, { recursive: true });
+
+  for (const command of ['pbcopy', 'xclip', 'wl-copy', 'clip']) {
+    fs.writeFileSync(path.join(fakeBin, command), '#!/bin/sh\ncat > "$REPOTEER_SMOKE_CLIPBOARD_FILE"\n');
+    fs.chmodSync(path.join(fakeBin, command), 0o755);
+  }
+
+  const result = runApp('1\nc\n\nb\nq\n', home, [], {
+    PATH: fakeBin + path.delimiter + process.env.PATH,
+    REPOTEER_SMOKE_CLIPBOARD_FILE: clipboardFile
+  });
+
+  assert(result.status === 0, result.stderr || 'project page copy project path action failed');
+  assert(result.stdout.includes('C. Copy Project Path'), 'project page did not render copy project path action');
+  assert(result.stdout.includes('Project path copied.'), 'project page did not confirm project path copy');
+  assert(fs.readFileSync(clipboardFile, 'utf8') === 'Project: ' + projectPath, 'project path copied text mismatch');
+
+  const page = new ProjectPage({
+    runtime: {},
+    router: {},
+    params: {}
+  });
+
+  assert(page.formatProjectPathLine({ path: projectPath }) === 'Project: ' + projectPath, 'project path copy line mismatch');
+}
+
 
 function smokeProjectPageEditProjectPath() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
@@ -2166,6 +2205,7 @@ smokePipedMultiCharacterActionPath();
 smokeProjectsPageRefreshPath();
 smokeAddProjectPath();
 smokeAddProjectCancelPath();
+smokeProjectPageCopyProjectPathPath();
 smokeGitRepoDiscovery();
 smokeProjectsPageHideCleanTogglePath();
 smokeProjectsPageSortsByChangeVolumePath();

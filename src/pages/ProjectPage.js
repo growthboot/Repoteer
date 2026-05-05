@@ -64,6 +64,7 @@ export class ProjectPage {
       color.bold('T.') + ' ' + (hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes'),
       color.bold('D.') + ' Delete project',
       color.bold('N.') + ' Rename project',
+      color.bold('C.') + ' Copy Project Path',
       ...this.router.globalActionItems(color)
     ]).forEach((row) => console.log(row));
     console.log('');
@@ -83,6 +84,11 @@ export class ProjectPage {
 
     if (key === 'n') {
       await this.editProject(project);
+      return;
+    }
+
+    if (key === 'c') {
+      await this.copyProjectPath(project);
       return;
     }
 
@@ -238,6 +244,26 @@ export class ProjectPage {
     console.log(color.green('Project deleted.'));
     await promptLine('Press Enter to continue.');
     await this.router.back();
+  }
+
+  async copyProjectPath(project) {
+    const color = this.runtime.color;
+    const copied = this.runtime.clipboard.copy(this.formatProjectPathLine(project));
+
+    console.log('');
+
+    if (!copied.ok) {
+      console.log(color.yellow(copied.warning || 'Clipboard copy failed.'));
+    } else {
+      console.log(color.green('Project path copied.'));
+    }
+
+    await promptLine('Press Enter to continue.');
+    await this.router.replace('project', { projectName: project.name });
+  }
+
+  formatProjectPathLine(project) {
+    return 'Project: ' + project.path;
   }
 
   shouldShowRepoWhenLineChangesHidden(repo) {
