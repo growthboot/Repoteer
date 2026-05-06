@@ -1085,8 +1085,8 @@ function smokeAddProjectPath() {
 
   assert(result.status === 0, result.stderr || 'add project path failed');
   assert(result.stdout.includes('Project saved.'), 'add project path did not save');
-  assert(/^1\.\s+Smoke Project/m.test(result.stdout), 'add project path did not render numbered project row');
-  assert(/^1\.\s+Smoke Project\s+\+0 \/ -0\s+\+0\s+0 repos\s+N\/A\s+\[z\]$/m.test(result.stdout), 'add project path did not render aligned project row shape');
+  assert(/^1\.·+Smoke Project/m.test(result.stdout), 'add project path did not render numbered project row');
+  assert(/^1\.·+Smoke Project\s+\+0 \/ -0\s+\+0\s+0 repos\s+N\/A\s+\[z\]$/m.test(result.stdout), 'add project path did not render aligned project row shape');
   assert(result.stdout.includes('+0 / -0'), 'add project path did not render zero change totals');
   assert(result.stdout.includes('+0'), 'add project path did not render zero net');
   assert(result.stdout.includes('0 repos'), 'add project path did not render repo count');
@@ -1274,8 +1274,8 @@ function smokeProjectsPagePinPath() {
   assert(result.stdout.includes('Projects'), 'pin path should render normal group');
   assert(result.stdout.includes('[0-9]P.'), 'pin path should render visible pin action');
   assert(result.stdout.includes('[0-9]A.'), 'pin path should render visible archive action');
-  assert(/^1\.\s+Alpha Project/m.test(result.stdout), 'pinned project should keep shared number sequence at top');
-  assert(/^2\.\s+Zebra Project/m.test(result.stdout), 'unpinned project should keep shared number sequence after pinned group');
+  assert(/^1\.·+Alpha Project/m.test(result.stdout), 'pinned project should keep shared number sequence at top');
+  assert(/^2\.·+Zebra Project/m.test(result.stdout), 'unpinned project should keep shared number sequence after pinned group');
 
   const projects = readProjects(home);
   assert(projects.find((project) => project.name === 'Alpha Project').pinned === true, 'pin path should persist pinned project');

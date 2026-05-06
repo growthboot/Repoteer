@@ -34,7 +34,7 @@ export class ArchivePage {
         ]);
       });
 
-      const formattedRows = formatTable(rows);
+      const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
       console.log(formattedRows[0]);
       console.log('');
       formattedRows.slice(1).forEach((row) => console.log(row));

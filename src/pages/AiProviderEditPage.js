@@ -100,7 +100,7 @@ export class AiProviderEditPage {
       ]);
     });
 
-    formatTable(rows).forEach((row) => console.log(row));
+    formatTable(rows, { leaderGap: color.dim('···') }).forEach((row) => console.log(row));
   }
 
   editableRowsForProvider(provider) {
