@@ -4,6 +4,8 @@ import { ArchivePage } from './pages/ArchivePage.js';
 import { AddProjectPage } from './pages/AddProjectPage.js';
 import { ProjectPage } from './pages/ProjectPage.js';
 import { RepoPage } from './pages/RepoPage.js';
+import { RepoHistoryPage } from './pages/RepoHistoryPage.js';
+import { CommitHistoryDetailPage } from './pages/CommitHistoryDetailPage.js';
 import { DiffPage } from './pages/DiffPage.js';
 import { FilePage } from './pages/FilePage.js';
 import { CommitConfirmPage } from './pages/CommitConfirmPage.js';
@@ -110,6 +112,8 @@ export async function main(argv = process.argv.slice(2)) {
       addProject: AddProjectPage,
       project: ProjectPage,
       repo: RepoPage,
+      repoHistory: RepoHistoryPage,
+      commitHistoryDetail: CommitHistoryDetailPage,
       diff: DiffPage,
       file: FilePage,
       commitConfirm: CommitConfirmPage,

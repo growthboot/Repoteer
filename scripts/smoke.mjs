@@ -1922,6 +1922,61 @@ function smokeRepoPageOpenAndDiffPath() {
   assert(result.stdout.includes('+const next = 2;'), 'diff page should render changed line');
 }
 
+function smokeRepoHistoryPath() {
+  if (!gitAvailable()) {
+    console.log('smoke repo history skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-history-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'seed.txt'), 'seed\n');
+  commitAll(repoPath, 'seed history repo');
+
+  for (let index = 1; index <= 12; index += 1) {
+    fs.writeFileSync(path.join(repoPath, 'history-' + String(index) + '.txt'), 'line ' + String(index) + '\n');
+    const body = index === 12
+      ? 'Body for history 12 starts here and continues with enough words to wrap inside the body column for readability.'
+      : 'Body for history ' + String(index);
+
+    commitAll(repoPath, 'history commit ' + String(index), body);
+  }
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'History Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp(['1', '1', 'y', 'n', '1', 'b', 'p', 'b', 'b', 'b', 'q'].join('\n') + '\n', home, [], {
+    COLUMNS: '80'
+  });
+  const output = stripAnsi(result.stdout);
+
+  assert(result.status === 0, result.stderr || 'repo history path failed');
+  assert(result.stdout.includes('Y. History'), 'repo page should render history action');
+  assert(result.stdout.includes('History: History Project / frontend'), 'history page should render title');
+  assert(result.stdout.includes('Page: 1'), 'history page should render first page');
+  assert(result.stdout.includes('Page: 2'), 'history page should render second page');
+  assert(result.stdout.includes('1.') && result.stdout.includes('10.'), 'history page should render page-local numbers');
+  assert(result.stdout.includes('history commit 12'), 'history page should render newest commit title');
+  assert(result.stdout.includes('Body for history 12'), 'history page should render commit body');
+  assert(/^1\. \d{4}-\d{2}-\d{2} [a-f0-9]+ \+1 \/ -0$/m.test(output), 'history item should render date, history id, and line stats on the first row');
+  assert(/^Title: history commit 12$/m.test(output), 'history item should render title on the second row');
+  assert(/^Body: Body for history 12 starts here/m.test(output), 'history item should render body on the third row');
+  assert(/^ {6}.+readability\.$/m.test(output), 'history body should wrap with continuation indentation');
+  assert(/readability\.\n\n2\. /m.test(output), 'history items should be separated by a blank line');
+  assert(result.stdout.includes('history commit 2'), 'second page should render older commit title');
+  assert(result.stdout.includes('Commit: History Project / frontend'), 'commit history detail should render title');
+  assert(result.stdout.includes('Title: history commit 2'), 'commit detail should preserve selected commit title');
+  assert(result.stdout.includes('history-2.txt'), 'commit detail should render changed file');
+  assert(result.stdout.includes('+1 / -0'), 'commit detail should render changed file stats');
+  assert(!result.stdout.includes('diff --git'), 'repo history path should not render historical patch diffs');
+}
+
 function smokeAiToolEntryPointsPath() {
   if (!gitAvailable()) {
     console.log('smoke AI tool entry points skipped: git unavailable');
@@ -2281,6 +2336,7 @@ smokeBranchFormatting();
 await smokeRouterTerminalModePath();
 smokeCommitConfirmReturnPagePath();
 smokeRepoPageOpenAndDiffPath();
+smokeRepoHistoryPath();
 smokeAiToolEntryPointsPath();
 smokeRepoFilePagePath();
 smokeRepoHotfixConfirmPath();

@@ -56,6 +56,7 @@ export class RepoPage {
       color.bold('F.') + ' Hotfix commit',
       color.bold('P.') + ' Write a commit & push',
       color.bold('W.') + ' Switch branch',
+      color.bold('Y.') + ' History',
       ...this.router.globalActionItems(color)
     ], { color }).forEach((row) => console.log(row));
     console.log('');
@@ -71,6 +72,15 @@ export class RepoPage {
       await this.router.open('branch', {
         projectName: project.name,
         repoPath: repo.path
+      });
+      return;
+    }
+
+    if (key === 'y') {
+      await this.router.open('repoHistory', {
+        projectName: project.name,
+        repoPath: repo.path,
+        page: 0
       });
       return;
     }

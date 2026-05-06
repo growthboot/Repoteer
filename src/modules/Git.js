@@ -188,6 +188,72 @@ export class Git {
     return this.fileOperations.getFileMetadata(repoPath, file);
   }
 
+  getCommitHistory(repoPath, options = {}) {
+    const page = Math.max(0, Number.parseInt(String(options.page ?? 0), 10) || 0);
+    const pageSize = Math.max(1, Number.parseInt(String(options.pageSize ?? 10), 10) || 10);
+    const result = this.run([
+      '-C',
+      repoPath,
+      'log',
+      '--skip=' + String(page * pageSize),
+      '--max-count=' + String(pageSize + 1),
+      '--format=%H%x1f%h%x1f%cs%x1f%s%x1f%b%x1e'
+    ]);
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        commits: [],
+        hasNextPage: false,
+        warning: result.stderr || 'Git history not available.'
+      };
+    }
+
+    const commits = this.parseCommitHistory(result.stdout).map((commit) => {
+      const changes = this.getCommitChanges(repoPath, commit.hash);
+      const stats = changes.ok ? this.sumCommitChanges(changes.files) : { added: 0, removed: 0 };
+
+      return {
+        ...commit,
+        added: stats.added,
+        removed: stats.removed
+      };
+    });
+
+    return {
+      ok: true,
+      commits: commits.slice(0, pageSize),
+      hasNextPage: commits.length > pageSize,
+      warning: null
+    };
+  }
+
+  getCommitChanges(repoPath, commitHash) {
+    const result = this.run([
+      '-C',
+      repoPath,
+      'show',
+      '--format=',
+      '--numstat',
+      '--no-ext-diff',
+      String(commitHash)
+    ]);
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        files: [],
+        warning: result.stderr || 'Commit changes not available.'
+      };
+    }
+
+    return {
+      ok: true,
+      files: this.parseCommitChangeStats(result.stdout),
+      warning: null
+    };
+  }
+
   commit(repoPath, title, body) {
     const add = this.run(['-C', repoPath, 'add', '-A']);
 
@@ -331,6 +397,60 @@ export class Git {
 
   parseStatusFile(line) {
     return this.fileOperations.parseStatusFile(line);
+  }
+
+  parseCommitHistory(output) {
+    return String(output || '')
+      .split('\x1e')
+      .map((record) => record.trim())
+      .filter(Boolean)
+      .map((record) => {
+        const parts = record.split('\x1f');
+        const hash = parts[0] ?? '';
+        const shortHash = parts[1] ?? hash.slice(0, 7);
+        const date = parts[2] ?? '';
+        const title = parts[3] ?? '';
+        const body = parts.slice(4).join('\x1f');
+
+        return {
+          hash,
+          shortHash,
+          date,
+          title,
+          body: this.normalizeCommitBody(body)
+        };
+      })
+      .filter((commit) => commit.hash);
+  }
+
+  parseCommitChangeStats(output) {
+    return this.parseLines(output).map((line) => {
+      const parsed = this.parseNumstatLine(line);
+
+      if (!parsed) {
+        return null;
+      }
+
+      return {
+        file: parsed.file,
+        added: parsed.added,
+        removed: parsed.removed,
+        net: parsed.added - parsed.removed
+      };
+    }).filter(Boolean);
+  }
+
+  normalizeCommitBody(body) {
+    return String(body || '').replace(/\s+/g, ' ').trim();
+  }
+
+  sumCommitChanges(files) {
+    return files.reduce((stats, file) => {
+      return {
+        added: stats.added + file.added,
+        removed: stats.removed + file.removed
+      };
+    }, { added: 0, removed: 0 });
   }
 
   buildUntrackedFileDiff(repoPath, file) {
