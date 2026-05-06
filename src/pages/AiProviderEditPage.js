@@ -34,7 +34,7 @@ export class AiProviderEditPage {
     console.log('');
     this.renderEditableRows(provider);
     console.log('');
-    formatActionColumns(this.actionsForProvider(provider, color)).forEach((row) => console.log(row));
+    formatActionColumns(this.actionsForProvider(provider, color), { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Row/action: ');
@@ -91,8 +91,10 @@ export class AiProviderEditPage {
     ];
 
     this.editableRowsForProvider(provider).forEach((row, index) => {
+      const hotkey = color.hotkey ?? color.bold;
+
       rows.push([
-        String(index + 1) + '.',
+        hotkey(String(index + 1) + '.'),
         row.label,
         row.value
       ]);

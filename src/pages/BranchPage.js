@@ -48,7 +48,7 @@ export class BranchPage {
     console.log('');
     formatActionColumns([
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Branch number/name: ');
@@ -90,8 +90,10 @@ export class BranchPage {
     ];
 
     branches.forEach((branch, index) => {
+      const hotkey = color.hotkey ?? color.bold;
+
       rows.push([
-        String(index + 1) + '.',
+        hotkey(String(index + 1) + '.'),
         formatBranchValue(branch, color),
         !repo.detached && repo.branch === branch ? color.green('current') : ''
       ]);

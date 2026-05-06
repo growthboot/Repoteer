@@ -2,15 +2,25 @@ import { stripAnsi } from './color.js';
 
 export function formatTable(rows, options = {}) {
   const gap = options.gap ?? '    ';
+  const leaderGap = options.leaderGap ?? null;
   const widths = getColumnWidths(rows);
 
   return rows.map((row) => {
+    const hasLeader = leaderGap && stripAnsi(row[0]).length > 0;
+
     return row.map((cell, index) => {
       const value = String(cell ?? '');
       const isLast = index === row.length - 1;
 
       return isLast ? value : padVisibleEnd(value, widths[index]);
-    }).join(gap).trimEnd();
+    }).reduce((line, value, index) => {
+      if (index === 0) {
+        return value;
+      }
+
+      const separator = hasLeader && index === 1 ? leaderGap : gap;
+      return line + separator + value;
+    }, '').trimEnd();
   });
 }
 

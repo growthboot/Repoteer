@@ -35,7 +35,7 @@ export class AiPromptEditPage {
       color.bold('P.') + ' Edit pre-prompt',
       color.bold('X.') + ' Reset prompts',
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');

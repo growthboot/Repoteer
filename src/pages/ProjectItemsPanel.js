@@ -72,18 +72,19 @@ export class ProjectItemsPanel {
     const rowCount = Math.max(bookmarks.length + 1, commands.length + 1, clipboardItems.length + 1);
 
     for (let index = 0; index < rowCount; index += 1) {
+      const hotkey = this.color.hotkey ?? this.color.bold;
       const bookmark = bookmarks[index] ?? null;
       const command = commands[index] ?? null;
       const clipboardItem = clipboardItems[index] ?? null;
       const bookmarkCell = bookmark
-        ? this.color.bold('m' + String(index + 1) + '.') + ' ' + bookmark.title
-        : index === bookmarks.length ? this.color.bold('am.') + ' Add bookmark' : '';
+        ? hotkey('m' + String(index + 1) + '.') + ' ' + bookmark.title
+        : index === bookmarks.length ? hotkey('am.') + ' Add bookmark' : '';
       const commandCell = command
-        ? this.color.bold('c' + String(index + 1) + '.') + ' ' + command.title
-        : index === commands.length ? this.color.bold('ac.') + ' Add command' : '';
+        ? hotkey('c' + String(index + 1) + '.') + ' ' + command.title
+        : index === commands.length ? hotkey('ac.') + ' Add command' : '';
       const clipboardCell = clipboardItem
-        ? this.color.bold('p' + String(index + 1) + '.') + ' ' + clipboardItem.title
-        : index === clipboardItems.length ? this.color.bold('ap.') + ' Add clipboard' : '';
+        ? hotkey('p' + String(index + 1) + '.') + ' ' + clipboardItem.title
+        : index === clipboardItems.length ? hotkey('ap.') + ' Add clipboard' : '';
 
       rows.push([bookmarkCell, commandCell, clipboardCell]);
     }
@@ -276,7 +277,7 @@ export class ProjectItemsPanel {
       this.color.bold('E.') + ' Edit',
       this.color.bold('D.') + ' Delete',
       ...this.globalActionItems()
-    ]).forEach((row) => console.log(row));
+    ], { color: this.color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -343,7 +344,7 @@ export class ProjectItemsPanel {
       this.color.bold('E.') + ' Edit',
       this.color.bold('D.') + ' Delete',
       ...this.globalActionItems()
-    ]).forEach((row) => console.log(row));
+    ], { color: this.color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -438,7 +439,7 @@ export class ProjectItemsPanel {
       this.color.bold('E.') + ' Edit',
       this.color.bold('D.') + ' Delete',
       ...this.globalActionItems()
-    ]).forEach((row) => console.log(row));
+    ], { color: this.color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');

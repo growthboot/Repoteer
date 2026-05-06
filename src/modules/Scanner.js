@@ -8,6 +8,8 @@ export class Scanner {
 
   scanProjects(projects, options = {}) {
     const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+    const onRepoProgress = typeof options.onRepoProgress === 'function' ? options.onRepoProgress : null;
+    const repoProgressProjectName = options.repoProgressProjectName ?? null;
     const scannedProjects = [];
     const total = projects.length;
 
@@ -30,7 +32,11 @@ export class Scanner {
         percent: Math.floor((index / total) * 100)
       });
 
-      scannedProjects.push(this.scanProject(project));
+      const scanOptions = onRepoProgress && project.name === repoProgressProjectName
+        ? { onRepoProgress }
+        : {};
+
+      scannedProjects.push(this.scanProject(project, scanOptions));
 
       onProgress?.({
         current: index + 1,
@@ -45,7 +51,7 @@ export class Scanner {
     };
   }
 
-  scanProject(project) {
+  scanProject(project, options = {}) {
     if (!fs.existsSync(project.path)) {
       return {
         ...project,
@@ -58,7 +64,7 @@ export class Scanner {
     let repos = [];
 
     try {
-      repos = this.discoverRepos(project.path);
+      repos = this.discoverRepos(project.path, options);
     } catch (error) {
       return {
         ...project,
@@ -76,10 +82,11 @@ export class Scanner {
     };
   }
 
-  discoverRepos(projectPath) {
+  discoverRepos(projectPath, options = {}) {
+    const onRepoProgress = typeof options.onRepoProgress === 'function' ? options.onRepoProgress : null;
     const candidates = [projectPath, ...this.listChildDirectories(projectPath)];
     const seen = new Set();
-    const repos = [];
+    const repoPaths = [];
 
     for (const candidate of candidates) {
       const detected = this.git.detectRepo(candidate);
@@ -95,8 +102,22 @@ export class Scanner {
       }
 
       seen.add(repoPath);
-      repos.push(this.scanRepo(repoPath));
+      repoPaths.push(repoPath);
     }
+
+    const repos = repoPaths.map((repoPath, index) => {
+      const repo = this.scanRepo(repoPath);
+
+      onRepoProgress?.({
+        current: index + 1,
+        total: repoPaths.length,
+        repoName: repo.name,
+        repoPath,
+        percent: Math.floor(((index + 1) / repoPaths.length) * 100)
+      });
+
+      return repo;
+    });
 
     return repos.sort((a, b) => a.name.localeCompare(b.name));
   }

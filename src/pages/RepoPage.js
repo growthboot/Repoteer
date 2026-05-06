@@ -57,7 +57,7 @@ export class RepoPage {
       color.bold('P.') + ' Write a commit & push',
       color.bold('W.') + ' Switch branch',
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -137,11 +137,12 @@ export class RepoPage {
     ];
 
     files.forEach((file, index) => {
+      const hotkey = color.hotkey ?? color.bold;
       const prefix = file.net >= 0 ? '+' : '';
       const net = prefix + String(file.net);
 
       rows.push([
-        String(index + 1) + '.',
+        hotkey(String(index + 1) + '.'),
         file.file,
         color.green('+' + String(file.added)) + ' / ' + color.red('-' + String(file.removed)),
         file.net < 0 ? color.red(net) : color.green(net),

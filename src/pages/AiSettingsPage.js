@@ -38,7 +38,7 @@ export class AiSettingsPage {
       color.bold('L.') + ' Add local model',
       color.bold('E.') + ' Edit provider',
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -96,8 +96,10 @@ export class AiSettingsPage {
     ];
 
     providers.forEach((provider, index) => {
+      const hotkey = color.hotkey ?? color.bold;
+
       rows.push([
-        String(index + 1) + '.',
+        hotkey(String(index + 1) + '.'),
         provider.title,
         this.formatEnabled(provider.enabled),
         String(provider.priority),

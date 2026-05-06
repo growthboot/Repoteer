@@ -1,7 +1,8 @@
 import { stripAnsi } from './color.js';
 
 export function formatActionColumns(actions, options = {}) {
-  const pairs = chunkPairs(actions);
+  const styledActions = actions.map((action) => formatActionHotkey(action, options.color));
+  const pairs = chunkPairs(styledActions);
 
   return formatColumnPairs(pairs, options);
 }
@@ -19,6 +20,17 @@ export function formatColumnPairs(pairs, options = {}) {
 
     return padVisibleEnd(leftAction, leftWidth) + gap + rightAction;
   });
+}
+
+function formatActionHotkey(action, color) {
+  const value = String(action ?? '');
+  const match = /^([^ ]+\.)( .*)?$/.exec(stripAnsi(value));
+
+  if (!match || typeof color?.hotkey !== 'function') {
+    return value;
+  }
+
+  return color.hotkey(match[1]) + (match[2] ?? '');
 }
 
 function chunkPairs(values) {

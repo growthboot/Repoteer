@@ -6,6 +6,7 @@ export function createColor(options = {}) {
   return {
     enabled,
     bold: (value) => String(value ?? ''),
+    hotkey: (value) => wrap(value, '1;38;2;180;120;255', '22;39', enabled),
     dim: (value) => wrap(value, '2', '22', enabled),
     green: (value) => wrap(value, '32', '39', enabled),
     red: (value) => wrap(value, '31', '39', enabled),

@@ -31,7 +31,7 @@ export class SettingsPage {
       color.bold('T.') + ' Toggle color',
       color.bold('A.') + ' AI settings',
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');

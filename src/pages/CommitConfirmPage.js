@@ -34,7 +34,7 @@ export class CommitConfirmPage {
       color.bold('T.') + ' Edit title',
       color.bold('E.') + ' Edit body',
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');

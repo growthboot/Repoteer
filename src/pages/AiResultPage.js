@@ -24,7 +24,7 @@ export class AiResultPage {
       color.bold('C.') + ' Copy result',
       color.bold('A.') + ' Run again',
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');

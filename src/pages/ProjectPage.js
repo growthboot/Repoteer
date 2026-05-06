@@ -17,7 +17,12 @@ export class ProjectPage {
 
   async showProject(projectName) {
     const color = this.runtime.color;
-    const snapshot = this.runtime.refreshSnapshot();
+    const snapshot = this.runtime.refreshSnapshot({
+      repoProgressProjectName: projectName,
+      onRepoProgress: (progress) => {
+        this.renderRepoLoadingProgress(progress, projectName);
+      }
+    });
     const project = snapshot.projects.find((candidate) => candidate.name === projectName) ?? null;
     const hideReposWithoutLineChanges = this.runtime.projectsPageHideReposWithoutLineChanges === true;
 
@@ -66,7 +71,7 @@ export class ProjectPage {
       color.bold('N.') + ' Rename project',
       color.bold('C.') + ' Copy Project Path',
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -120,11 +125,12 @@ export class ProjectPage {
     ];
 
     repos.forEach((repo, index) => {
+      const hotkey = color.hotkey ?? color.bold;
       const prefix = repo.net >= 0 ? '+' : '';
       const net = prefix + String(repo.net);
 
       rows.push([
-        String(index + 1) + '.',
+        hotkey(String(index + 1) + '.'),
         repo.name,
         formatBranchName(repo, color),
         color.green('+' + String(repo.added)) + ' / ' + color.red('-' + String(repo.removed)),
@@ -187,6 +193,7 @@ export class ProjectPage {
     if (result.project.name !== project.name) {
       this.runtime.bookmarksStore.renameProject(project.name, result.project.name);
       this.runtime.commandsStore.renameProject(project.name, result.project.name);
+      this.runtime.clipboardItemsStore.renameProject(project.name, result.project.name);
     }
 
     console.log(color.green('Project updated.'));
@@ -240,6 +247,7 @@ export class ProjectPage {
 
     this.runtime.bookmarksStore.deleteProject(project.name);
     this.runtime.commandsStore.deleteProject(project.name);
+    this.runtime.clipboardItemsStore.deleteProject(project.name);
 
     console.log(color.green('Project deleted.'));
     await promptLine('Press Enter to continue.');
@@ -264,6 +272,40 @@ export class ProjectPage {
 
   formatProjectPathLine(project) {
     return 'Project: ' + project.path;
+  }
+
+  renderRepoLoadingProgress(progress, projectName) {
+    if (!this.shouldRenderLoadingProgress()) {
+      return false;
+    }
+
+    const color = this.runtime.color;
+    const percent = Math.max(0, Math.min(100, progress.percent));
+    const repoName = progress.repoName ?? 'repos...';
+
+    console.clear();
+    console.log(color.bold('Project: ' + projectName));
+    console.log('');
+    console.log(color.dim('Scanning repos'));
+    console.log('');
+    console.log(this.formatLoadingBar(percent) + ' ' + color.green(String(percent).padStart(3, ' ') + '%'));
+    console.log(color.dim('Loading repo: ') + color.yellow(repoName));
+
+    return true;
+  }
+
+  shouldRenderLoadingProgress() {
+    return process.stdout.isTTY === true && process.stdin.isTTY === true;
+  }
+
+  formatLoadingBar(percent) {
+    const color = this.runtime.color;
+    const width = 30;
+    const filled = Math.round((percent / 100) * width);
+    const empty = width - filled;
+    const bar = color.green('='.repeat(filled)) + color.dim('-'.repeat(empty));
+
+    return '[' + bar + ']';
   }
 
   shouldShowRepoWhenLineChangesHidden(repo) {

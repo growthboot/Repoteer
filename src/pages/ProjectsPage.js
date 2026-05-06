@@ -50,7 +50,7 @@ export class ProjectsPage {
       '[0-9]P. Pin/unpin project',
       '[0-9]A. Archive project',
       ...this.router.globalActionItems(color, { back: false })
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -119,7 +119,12 @@ export class ProjectsPage {
 
   async showProject(projectName) {
     const color = this.runtime.color;
-    const snapshot = this.runtime.refreshSnapshot();
+    const snapshot = this.runtime.refreshSnapshot({
+      repoProgressProjectName: projectName,
+      onRepoProgress: (progress) => {
+        this.renderRepoLoadingProgress(progress, projectName);
+      }
+    });
     const project = snapshot.projects.find((candidate) => candidate.name === projectName) ?? null;
     const hideReposWithoutLineChanges = this.runtime.projectsPageHideReposWithoutLineChanges === true;
 
@@ -152,11 +157,12 @@ export class ProjectsPage {
       ];
 
       repos.forEach((repo, index) => {
+        const hotkey = color.hotkey ?? color.bold;
         const prefix = repo.net >= 0 ? '+' : '';
         const net = prefix + String(repo.net);
 
         rows.push([
-          String(index + 1) + '.',
+          hotkey(String(index + 1) + '.'),
           repo.name,
           color.green('+' + String(repo.added)) + ' / ' + color.red('-' + String(repo.removed)),
           repo.net < 0 ? color.red(net) : color.green(net),
@@ -165,7 +171,7 @@ export class ProjectsPage {
         ]);
       });
 
-      const formattedRows = formatTable(rows);
+      const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
       console.log(formattedRows[0]);
       console.log('');
       formattedRows.slice(1).forEach((row) => console.log(row));
@@ -189,7 +195,7 @@ export class ProjectsPage {
       color.bold('D.') + ' Delete project',
       color.bold('N.') + ' Rename project',
       ...this.router.globalActionItems(color, { back: false })
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -274,6 +280,7 @@ export class ProjectsPage {
     if (result.project.name !== project.name) {
       this.runtime.bookmarksStore.renameProject(project.name, result.project.name);
       this.runtime.commandsStore.renameProject(project.name, result.project.name);
+      this.runtime.clipboardItemsStore.renameProject(project.name, result.project.name);
     }
     console.log(color.green('Project updated.'));
     await promptLine('Press Enter to continue.');
@@ -326,6 +333,7 @@ export class ProjectsPage {
 
     this.runtime.bookmarksStore.deleteProject(project.name);
     this.runtime.commandsStore.deleteProject(project.name);
+    this.runtime.clipboardItemsStore.deleteProject(project.name);
 
     console.log(color.green('Project deleted.'));
     await promptLine('Press Enter to continue.');
@@ -384,8 +392,9 @@ export class ProjectsPage {
     ];
 
     rowsProjects.forEach((project) => {
-      const label = String(projects.indexOf(project) + 1) + '.';
-      const shortcut = color.dim(formatShortcut(project.shortcut));
+      const hotkey = color.hotkey ?? color.bold;
+      const label = hotkey(String(projects.indexOf(project) + 1) + '.');
+      const shortcut = color.hotkey ? color.hotkey(formatShortcut(project.shortcut)) : color.dim(formatShortcut(project.shortcut));
       const changes = this.formatChanges(project);
       const net = this.formatNet(project);
       const modified = project.warning ? color.yellow('warning') : this.formatRepoCount(project.repos.length);
@@ -394,7 +403,7 @@ export class ProjectsPage {
       rows.push([label, project.name, changes, net, modified, lastCommit, shortcut]);
     });
 
-    const formattedRows = formatTable(rows);
+    const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
     console.log(formattedRows[0]);
     console.log('');
     formattedRows.slice(1).forEach((row) => console.log(row));
@@ -457,6 +466,26 @@ export class ProjectsPage {
     console.log('');
     console.log(this.formatLoadingBar(percent) + ' ' + color.green(String(percent).padStart(3, ' ') + '%'));
     console.log(color.dim(item));
+
+    return true;
+  }
+
+  renderRepoLoadingProgress(progress, projectName) {
+    if (!this.shouldRenderLoadingProgress()) {
+      return false;
+    }
+
+    const color = this.runtime.color;
+    const percent = Math.max(0, Math.min(100, progress.percent));
+    const repoName = progress.repoName ?? 'repos...';
+
+    console.clear();
+    console.log(color.bold('Project: ' + projectName));
+    console.log('');
+    console.log(color.dim('Scanning repos'));
+    console.log('');
+    console.log(this.formatLoadingBar(percent) + ' ' + color.green(String(percent).padStart(3, ' ') + '%'));
+    console.log(color.dim('Loading repo: ') + color.yellow(repoName));
 
     return true;
   }

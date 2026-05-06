@@ -25,8 +25,10 @@ export class ArchivePage {
       ];
 
       projects.forEach((project, index) => {
+        const hotkey = color.hotkey ?? color.bold;
+
         rows.push([
-          String(index + 1) + '.',
+          hotkey(String(index + 1) + '.'),
           project.name,
           project.path
         ]);
@@ -43,7 +45,7 @@ export class ArchivePage {
       '[0-9]U. Unarchive project',
       '[0-9]D. Delete project',
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');

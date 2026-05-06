@@ -1,5 +1,6 @@
 import { promptAction, promptLine } from '../utils/input.js';
 import { formatDiffForDisplay } from '../utils/diff.js';
+import { formatActionColumns } from '../utils/menu.js';
 
 const MAX_VISIBLE_DIFF_CHARS = 12000;
 
@@ -41,10 +42,12 @@ export class DiffPage {
     }
 
     console.log('');
-    console.log(color.bold('C.') + ' Copy full diff');
-    console.log(color.bold('G.') + ' Generate summary');
-    console.log(color.bold('E.') + ' Security review');
-    this.router.globalActionItems(color).forEach((action) => console.log(action));
+    formatActionColumns([
+      color.bold('C.') + ' Copy full diff',
+      color.bold('G.') + ' Generate summary',
+      color.bold('E.') + ' Security review',
+      ...this.router.globalActionItems(color)
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');

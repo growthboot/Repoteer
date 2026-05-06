@@ -143,6 +143,11 @@ function readCommands(home) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+function readClipboardItems(home) {
+  const file = path.join(home, '.repoteer', 'storage', 'clipboard.json');
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
 function smokeQuitPath() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
   const result = runApp('q\n', home);
@@ -1471,11 +1476,21 @@ function smokeProjectItemsPath() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-items-project-'));
   const storageDir = path.join(home, '.repoteer', 'storage');
+  const fakeBin = path.join(home, 'fake-bin');
+  const clipboardFile = path.join(home, 'clipboard.txt');
+
 
   fs.mkdirSync(storageDir, { recursive: true });
   fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
     { name: 'Items Project', path: projectPath, shortcut: null }
   ], null, 2) + '\n');
+
+  fs.mkdirSync(fakeBin, { recursive: true });
+
+  for (const command of ['pbcopy', 'xclip', 'wl-copy', 'clip']) {
+    fs.writeFileSync(path.join(fakeBin, command), '#!/bin/sh\ncat > "$REPOTEER_SMOKE_CLIPBOARD_FILE"\n');
+    fs.chmodSync(path.join(fakeBin, command), 0o755);
+  }
 
   const addInput = [
     '1',
@@ -1490,23 +1505,41 @@ function smokeProjectItemsPath() {
     '',
     'CLI notes',
     '',
+    'ap',
+    'Release notes',
+    'First clipboard line',
+    'Second clipboard line',
+    '.',
+    'Clipboard notes',
+    '',
+    'p1',
+    '',
     'b',
     'q'
   ].join('\n') + '\n';
-  const addResult = runApp(addInput, home);
+  const addResult = runApp(addInput, home, [], {
+    PATH: fakeBin + path.delimiter + process.env.PATH,
+    REPOTEER_SMOKE_CLIPBOARD_FILE: clipboardFile
+  });
 
   assert(addResult.status === 0, addResult.stderr || 'project items add path failed');
   assert(addResult.stdout.includes('Bookmarks'), 'project items add path did not render bookmarks header');
   assert(addResult.stdout.includes('Commands'), 'project items add path did not render commands header');
+  assert(addResult.stdout.includes('Clipboard'), 'project items add path did not render clipboard header');
   assert(addResult.stdout.includes('am. Add bookmark'), 'project items add path did not render add bookmark action');
   assert(addResult.stdout.includes('ac. Add command'), 'project items add path did not render add command action');
+  assert(addResult.stdout.includes('ap. Add clipboard'), 'project items add path did not render add clipboard action');
   assert(addResult.stdout.includes('Bookmark saved.'), 'project items add path did not save bookmark');
   assert(addResult.stdout.includes('Command saved.'), 'project items add path did not save command');
+  assert(addResult.stdout.includes('Clipboard item saved.'), 'project items add path did not save clipboard item');
+  assert(addResult.stdout.includes('Clipboard copied: Release notes'), 'project items add path did not copy clipboard item');
   assert(addResult.stdout.includes('m1. Dashboard'), 'project items add path did not render saved bookmark');
   assert(addResult.stdout.includes('c1. project cli'), 'project items add path did not render saved command');
+  assert(addResult.stdout.includes('p1. Release notes'), 'project items add path did not render saved clipboard item');
 
   const bookmarks = readBookmarks(home);
   const commands = readCommands(home);
+  const clipboardItems = readClipboardItems(home);
 
   assert(bookmarks.length === 1, 'project items should save one bookmark');
   assert(bookmarks[0].projectName === 'Items Project', 'bookmark project name mismatch');
@@ -1517,10 +1550,17 @@ function smokeProjectItemsPath() {
   assert(commands[0].title === 'project cli', 'command title mismatch');
   assert(commands[0].command === 'echo ok', 'command text mismatch');
   assert(commands[0].workingDirectory === projectPath, 'command working directory should default to project path');
+  assert(clipboardItems.length === 1, 'project items should save one clipboard item');
+  assert(clipboardItems[0].projectName === 'Items Project', 'clipboard item project name mismatch');
+  assert(clipboardItems[0].title === 'Release notes', 'clipboard item title mismatch');
+  assert(clipboardItems[0].text === 'First clipboard line\nSecond clipboard line', 'clipboard item text mismatch');
+  assert(fs.readFileSync(clipboardFile, 'utf8') === 'First clipboard line\nSecond clipboard line', 'clipboard copied text mismatch');
 
   const detailInput = [
     '1',
     'm1',
+    'b',
+    'vp1',
     'b',
     'c1',
     'b',
@@ -1529,6 +1569,10 @@ function smokeProjectItemsPath() {
     'yes',
     '',
     'c1',
+    'd',
+    'yes',
+    '',
+    'vp1',
     'd',
     'yes',
     '',
@@ -1544,10 +1588,15 @@ function smokeProjectItemsPath() {
   assert(detailResult.stdout.includes('Command: echo ok'), 'command detail path did not render command');
   assert(detailResult.stdout.includes('Working directory: ' + projectPath), 'command detail path did not render working directory');
   assert(detailResult.stdout.includes('T. Open in terminal'), 'command detail path did not render open in terminal action');
+  assert(detailResult.stdout.includes('Clipboard: Release notes'), 'clipboard detail path did not render title');
+  assert(detailResult.stdout.includes('First clipboard line'), 'clipboard detail path did not render text');
+  assert(detailResult.stdout.includes('C. Copy'), 'clipboard detail path did not render copy action');
   assert(detailResult.stdout.includes('Bookmark deleted.'), 'bookmark detail path did not delete bookmark');
   assert(detailResult.stdout.includes('Command deleted.'), 'command detail path did not delete command');
+  assert(detailResult.stdout.includes('Clipboard item deleted.'), 'clipboard detail path did not delete clipboard item');
   assert(readBookmarks(home).length === 0, 'project items should delete bookmark');
   assert(readCommands(home).length === 0, 'project items should delete command');
+  assert(readClipboardItems(home).length === 0, 'project items should delete clipboard item');
 }
 
 async function smokeProjectCommandRunTerminalModePath() {
@@ -1644,15 +1693,21 @@ function smokeTableFormatting() {
   assert(stripAnsi(coloredRows[1]).indexOf('ok') === stripAnsi(coloredRows[2]).indexOf('failed'), 'table should align ANSI-colored cells');
 
   const actionRows = formatActionColumns([
-    '\u001b[1mT.\u001b[22m Hide projects without code changes',
-    '\u001b[1mR.\u001b[22m Refresh',
-    '\u001b[1mA.\u001b[22m Add project',
-    '\u001b[1mV.\u001b[22m View archive',
-    '\u001b[1m[0-9]P.\u001b[22m Pin/unpin project',
-    '\u001b[1m[0-9]A.\u001b[22m Archive project',
-    '\u001b[1mS.\u001b[22m Settings',
-    '\u001b[1mQ.\u001b[22m Quit'
-  ]);
+    'T. Hide projects without code changes',
+    'R. Refresh',
+    'A. Add project',
+    'V. View archive',
+    '[0-9]P. Pin/unpin project',
+    '[0-9]A. Archive project',
+    'S. Settings',
+    'Q. Quit'
+  ], {
+    color: {
+      hotkey: (value) => '\u001b[1;38;2;180;120;255m' + value + '\u001b[22;39m'
+    }
+  });
+
+  assert(actionRows[0].includes('\u001b[1;38;2;180;120;255mT.\u001b[22;39m'), 'action hotkey should render bold purple');
 
   assert(actionRows.length === 4, 'action columns should pair actions across rows');
   assert(stripAnsi(actionRows[0]).includes('R. Refresh'), 'action columns should render first right action');

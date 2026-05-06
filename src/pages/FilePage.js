@@ -62,7 +62,7 @@ export class FilePage {
       color.bold('C.') + ' Copy file diff',
       color.bold('D.') + ' Discard file changes',
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');

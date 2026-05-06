@@ -49,7 +49,7 @@ export class AiProviderSelectPage {
     formatActionColumns([
       color.bold('A.') + ' AI settings',
       ...this.router.globalActionItems(color)
-    ]).forEach((row) => console.log(row));
+    ], { color }).forEach((row) => console.log(row));
     console.log('');
 
     const answer = await promptAction('Action: ');
@@ -83,8 +83,10 @@ export class AiProviderSelectPage {
     ];
 
     providers.forEach((provider, index) => {
+      const hotkey = color.hotkey ?? color.bold;
+
       rows.push([
-        String(index + 1) + '.',
+        hotkey(String(index + 1) + '.'),
         provider.title,
         provider.type === 'local' ? 'Ready' : 'Open URL',
         String(provider.priority)
@@ -218,7 +220,7 @@ export class AiProviderSelectPage {
         color.bold('1.') + ' Read clipboard',
         color.bold('2.') + ' Paste manually',
         ...this.router.globalActionItems(color)
-      ]).forEach((row) => console.log(row));
+      ], { color }).forEach((row) => console.log(row));
       console.log('');
 
       const answer = await promptAction('Action: ');
