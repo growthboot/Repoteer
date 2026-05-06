@@ -31,6 +31,9 @@ export class ProjectsPage {
     }
     const hideCleanProjects = this.runtime.projectsPageHideClean === true;
     const orderedProjects = this.orderProjects(snapshot.projects);
+    this.renderProjectsSummary(orderedProjects);
+    console.log('');
+
     const projects = hideCleanProjects ? orderedProjects.filter((project) => {
       return this.shouldShowProjectWhenCleanHidden(project);
     }) : orderedProjects;
@@ -409,6 +412,36 @@ export class ProjectsPage {
     formattedRows.slice(1).forEach((row) => console.log(row));
   }
 
+  renderProjectsSummary(projects) {
+    const totals = this.sumProjectTotals(projects);
+
+    console.log(
+      this.runtime.color.bold('Total: ') +
+      this.formatLineChanges(totals.added, totals.removed) +
+      '  ' +
+      this.runtime.color.bold('Net: ') +
+      this.formatNetValue(totals.net)
+    );
+  }
+
+  sumProjectTotals(projects) {
+    return projects.reduce((totals, project) => {
+      if (!project.totals) {
+        return totals;
+      }
+
+      return {
+        added: totals.added + project.totals.added,
+        removed: totals.removed + project.totals.removed,
+        net: totals.net + project.totals.net
+      };
+    }, {
+      added: 0,
+      removed: 0,
+      net: 0
+    });
+  }
+
   getChangeVolume(project) {
     if (!project.totals) {
       return 0;
@@ -432,8 +465,12 @@ export class ProjectsPage {
       return 'N/A';
     }
 
+    return this.formatLineChanges(project.totals.added, project.totals.removed);
+  }
+
+  formatLineChanges(added, removed) {
     const color = this.runtime.color;
-    return color.green('+' + String(project.totals.added)) + ' / ' + color.red('-' + String(project.totals.removed));
+    return color.green('+' + String(added)) + ' / ' + color.red('-' + String(removed));
   }
 
   formatNet(project) {
@@ -441,11 +478,15 @@ export class ProjectsPage {
       return 'N/A';
     }
 
-    const color = this.runtime.color;
-    const prefix = project.totals.net >= 0 ? '+' : '';
-    const value = prefix + String(project.totals.net);
+    return this.formatNetValue(project.totals.net);
+  }
 
-    return project.totals.net < 0 ? color.red(value) : color.green(value);
+  formatNetValue(net) {
+    const color = this.runtime.color;
+    const prefix = net >= 0 ? '+' : '';
+    const value = prefix + String(net);
+
+    return net < 0 ? color.red(value) : color.green(value);
   }
 
   renderLoadingProgress(progress) {

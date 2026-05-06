@@ -1087,6 +1087,7 @@ function smokeAddProjectPath() {
   assert(result.stdout.includes('Project saved.'), 'add project path did not save');
   assert(/^1\.·+Smoke Project/m.test(result.stdout), 'add project path did not render numbered project row');
   assert(/^1\.·+Smoke Project\s+\+0 \/ -0\s+\+0\s+0 repos\s+N\/A\s+\[z\]$/m.test(result.stdout), 'add project path did not render aligned project row shape');
+  assert(result.stdout.includes('Total: +0 / -0  Net: +0'), 'add project path did not render total project summary');
   assert(result.stdout.includes('+0 / -0'), 'add project path did not render zero change totals');
   assert(result.stdout.includes('+0'), 'add project path did not render zero net');
   assert(result.stdout.includes('0 repos'), 'add project path did not render repo count');
@@ -1156,6 +1157,7 @@ function smokeGitRepoDiscovery() {
   const result = runApp(input, home);
 
   assert(result.status === 0, result.stderr || 'git discovery app path failed');
+  assert(result.stdout.includes('Total: +4 / -0  Net: +4'), 'projects page did not render discovered total project summary');
   assert(result.stdout.includes('+4 / -0'), 'projects page did not render discovered change totals');
   assert(result.stdout.includes('+4'), 'projects page did not render discovered net total');
   assert(result.stdout.includes('2 repos'), 'projects page did not render discovered repo count');
@@ -1246,6 +1248,7 @@ function smokeProjectsPageSortsByChangeVolumePath() {
   const result = runApp('q\n', home);
 
   assert(result.status === 0, result.stderr || 'projects page sort path failed');
+  assert(result.stdout.includes('Total: +4 / -0  Net: +4'), 'projects page sort path did not render total project summary');
 
   const alphaIndex = result.stdout.indexOf('Alpha Project');
   const zebraIndex = result.stdout.indexOf('Zebra Project');
