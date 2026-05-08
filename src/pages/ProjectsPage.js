@@ -394,7 +394,9 @@ export class ProjectsPage {
       ['', color.bold('Project'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit'), color.bold('shortcut')]
     ];
 
-    rowsProjects.forEach((project) => {
+    const rowProjects = [];
+
+    projects.forEach((project) => {
       const hotkey = color.hotkey ?? color.bold;
       const label = hotkey(String(projects.indexOf(project) + 1) + '.');
       const shortcut = color.hotkey ? color.hotkey(formatShortcut(project.shortcut)) : color.dim(formatShortcut(project.shortcut));
@@ -403,13 +405,16 @@ export class ProjectsPage {
       const modified = project.warning ? color.yellow('warning') : this.formatRepoCount(project.repos.length);
       const lastCommit = this.formatLastCommit(project);
 
+      rowProjects.push(project);
       rows.push([label, project.name, changes, net, modified, lastCommit, shortcut]);
     });
 
     const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
+    const formattedProjectRows = new Map(rowProjects.map((project, index) => [project, formattedRows[index + 1]]));
+
     console.log(formattedRows[0]);
     console.log('');
-    formattedRows.slice(1).forEach((row) => console.log(row));
+    rowsProjects.forEach((project) => console.log(formattedProjectRows.get(project)));
   }
 
   renderProjectsSummary(projects) {
