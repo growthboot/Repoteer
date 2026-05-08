@@ -1894,6 +1894,81 @@ function smokeCommitConfirmReturnPagePath() {
   assert(result.stdout.includes('CURRENT_PAGE repo'), 'commit confirmation should leave router on repo page');
 }
 
+function smokeCommitConfirmAutoPushPath() {
+  const code = `
+    import { Router } from './src/router/Router.js';
+    import { CommitConfirmPage } from './src/pages/CommitConfirmPage.js';
+
+    const repo = {
+      path: '/tmp/push-repo',
+      modifiedFiles: 1
+    };
+    const color = {
+      bold: (value) => value,
+      dim: (value) => value,
+      green: (value) => value,
+      yellow: (value) => value,
+      red: (value) => value,
+      darkYellow: (value) => value
+    };
+    const runtime = {
+      color,
+      commitManager: {
+        commit(repoPath, title, body) {
+          console.log('COMMIT_CALLED ' + repoPath + ' ' + title + ' ' + body);
+          return { ok: true, warning: null };
+        }
+      },
+      git: {
+        push(repoPath) {
+          console.log('PUSH_CALLED ' + repoPath);
+          return { ok: true, warning: null };
+        }
+      },
+      refreshSnapshot() {
+        return {
+          projects: [
+            {
+              name: 'Push Project',
+              repos: [repo]
+            }
+          ]
+        };
+      }
+    };
+    class RepoPage {
+      async show() {
+        console.log('Repo Page Returned');
+      }
+    }
+    const router = new Router(runtime, {
+      repo: RepoPage,
+      commitConfirm: CommitConfirmPage
+    });
+
+    await router.open('repo');
+    await router.open('commitConfirm', {
+      projectName: 'Push Project',
+      repoPath: repo.path,
+      title: 'push after commit',
+      body: 'Push automatically after commit.',
+      pushAfterCommit: true,
+      returnPage: 'repo'
+    });
+  `;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+    cwd: root,
+    input: ['c', ''].join('\n') + '\n',
+    encoding: 'utf8'
+  });
+
+  assert(result.status === 0, result.stderr || 'commit confirmation auto push path failed');
+  assert(result.stdout.includes('COMMIT_CALLED /tmp/push-repo push after commit Push automatically after commit.'), 'commit confirmation should call commit');
+  assert(result.stdout.includes('PUSH_CALLED /tmp/push-repo'), 'commit confirmation should push automatically');
+  assert(!result.stdout.includes('Push now?'), 'commit confirmation should not ask for a second push confirmation');
+  assert(result.stdout.includes('Push complete.'), 'commit confirmation should report successful push');
+}
+
 function smokeRepoPageOpenAndDiffPath() {
   if (!gitAvailable()) {
     console.log('smoke repo page open skipped: git unavailable');
@@ -1919,10 +1994,49 @@ function smokeRepoPageOpenAndDiffPath() {
 
   assert(result.status === 0, result.stderr || 'repo page open and diff path failed');
   assert(result.stdout.includes('Repo: Repo Page Project / frontend'), 'repo page should render selected repo title');
+  assert(result.stdout.includes('Push: no upstream'), 'repo page should render push status');
   assert(result.stdout.includes('V. View full diff'), 'repo page should render view diff action');
-  assert(result.stdout.includes('F. Hotfix commit'), 'repo page should render hotfix action');
+  assert(result.stdout.includes('F. Hotfix commit & push'), 'repo page should render hotfix action');
   assert(result.stdout.includes('Repo: frontend (diff)'), 'diff page should render title');
   assert(result.stdout.includes('+const next = 2;'), 'diff page should render changed line');
+}
+
+function smokeRepoPageUnpushedPushPath() {
+  if (!gitAvailable()) {
+    console.log('smoke repo unpushed push skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-unpushed-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+  const remotePath = path.join(projectPath, 'remote.git');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  runGit(['init', '--bare', remotePath], projectPath);
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
+  commitAll(repoPath, 'seed unpushed repo');
+  runGit(['remote', 'add', 'origin', remotePath], repoPath);
+  runGit(['push', '-u', 'origin', 'HEAD'], repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\nconst next = 2;\n');
+  commitAll(repoPath, 'unpushed commit');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Unpushed Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp(['1', '1', 'u', '', 'b', 'b', 'q'].join('\n') + '\n', home);
+  const remoteLog = spawnSync('git', ['--git-dir', remotePath, 'log', '-1', '--format=%s'], {
+    encoding: 'utf8'
+  });
+
+  assert(result.status === 0, result.stderr || 'repo unpushed push path failed');
+  assert(result.stdout.includes('Push: 1 unpushed commit(s) to origin/'), 'repo page should render unpushed commit count');
+  assert(result.stdout.includes('U. Push unpushed commits'), 'repo page should render unpushed push action');
+  assert(result.stdout.includes('Push complete.'), 'repo page should confirm direct push');
+  assert(remoteLog.stdout.trim() === 'unpushed commit', 'direct push action should update remote');
 }
 
 function smokeRepoHistoryPath() {
@@ -2338,7 +2452,9 @@ smokeTableFormatting();
 smokeBranchFormatting();
 await smokeRouterTerminalModePath();
 smokeCommitConfirmReturnPagePath();
+smokeCommitConfirmAutoPushPath();
 smokeRepoPageOpenAndDiffPath();
+smokeRepoPageUnpushedPushPath();
 smokeRepoHistoryPath();
 smokeAiToolEntryPointsPath();
 smokeRepoFilePagePath();

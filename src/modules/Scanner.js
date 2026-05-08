@@ -126,10 +126,12 @@ export class Scanner {
     const stats = this.git.getDiffStats(repoPath);
     const lastCommit = this.git.getLastCommitAge(repoPath);
     const currentBranch = this.git.getCurrentBranch(repoPath);
+    const upstreamStatus = this.git.getUpstreamStatus(repoPath);
     const warnings = [
       stats.ok ? null : stats.warning,
       lastCommit.ok ? null : lastCommit.warning,
-      currentBranch.ok ? null : currentBranch.warning
+      currentBranch.ok ? null : currentBranch.warning,
+      upstreamStatus.ok ? null : upstreamStatus.warning
     ].filter(Boolean);
 
     return {
@@ -138,6 +140,9 @@ export class Scanner {
       branch: currentBranch.branch,
       branchDisplay: currentBranch.display,
       detached: currentBranch.detached,
+      upstream: upstreamStatus.upstream,
+      ahead: upstreamStatus.ahead,
+      behind: upstreamStatus.behind,
       warning: warnings.length > 0 ? warnings.join(' ') : null,
       added: stats.added,
       removed: stats.removed,

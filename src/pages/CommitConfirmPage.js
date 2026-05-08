@@ -97,16 +97,12 @@ export class CommitConfirmPage {
     this.runtime.refreshSnapshot();
 
     if (this.params.pushAfterCommit === true) {
-      const answer = await promptLine('Push now? Type "yes" to confirm: ');
+      const pushed = this.runtime.git.push(repo.path);
 
-      if (answer.trim().toLowerCase() === 'yes') {
-        const pushed = this.runtime.git.push(repo.path);
-
-        if (!pushed.ok) {
-          console.log(color.yellow(pushed.warning));
-        } else {
-          console.log(color.green('Push complete.'));
-        }
+      if (!pushed.ok) {
+        console.log(color.yellow(pushed.warning));
+      } else {
+        console.log(color.green('Push complete.'));
       }
     }
 

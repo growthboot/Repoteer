@@ -309,7 +309,7 @@ export class AiProviderSelectPage {
       repoPath: params.repoPath,
       title: parsed.title,
       body: parsed.body,
-      pushAfterCommit: false,
+      pushAfterCommit: true,
       returnPage: 'repo',
       returnParams: {
         projectName: params.projectName,

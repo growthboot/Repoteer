@@ -27,6 +27,7 @@ export class RepoPage {
 
     console.log(color.bold('Repo: ' + project.name + ' / ' + repo.name));
     console.log('Branch: ' + formatBranchName(repo, color));
+    this.renderPushStatus(repo, color);
     console.log('');
 
     if (repo.warning) {
@@ -53,8 +54,9 @@ export class RepoPage {
       color.bold('A.') + ' Commit review',
       color.bold('E.') + ' Security review',
       color.bold('M.') + ' Generate commit',
-      color.bold('F.') + ' Hotfix commit',
+      color.bold('F.') + ' Hotfix commit & push',
       color.bold('P.') + ' Write a commit & push',
+      ...(repo.ahead > 0 ? [color.bold('U.') + ' Push unpushed commits'] : []),
       color.bold('W.') + ' Switch branch',
       color.bold('Y.') + ' History',
       ...this.router.globalActionItems(color)
@@ -123,7 +125,7 @@ export class RepoPage {
 
     if (key === 'f') {
       const payload = this.runtime.commitManager.createHotfixPayload(repo);
-      await this.openCommitConfirm(project, repo, payload, false);
+      await this.openCommitConfirm(project, repo, payload, true);
       return;
     }
 
@@ -138,7 +140,31 @@ export class RepoPage {
       return;
     }
 
+    if (key === 'u' && repo.ahead > 0) {
+      await this.pushRepo(repo);
+      return;
+    }
+
     await this.router.replace('repo', this.params);
+  }
+
+  renderPushStatus(repo, color) {
+    if (!repo.upstream) {
+      console.log('Push: no upstream');
+      return;
+    }
+
+    if (repo.ahead > 0) {
+      console.log(color.yellow('Push: ' + String(repo.ahead) + ' unpushed commit(s) to ' + repo.upstream));
+      return;
+    }
+
+    if (repo.behind > 0) {
+      console.log(color.yellow('Push: remote has ' + String(repo.behind) + ' commit(s) not in this branch'));
+      return;
+    }
+
+    console.log('Push: up to date with ' + repo.upstream);
   }
 
   renderFiles(files, color) {
@@ -189,6 +215,23 @@ export class RepoPage {
     }
 
     console.log(color.green('Full diff copied.'));
+    await promptLine('Press Enter to continue.');
+    await this.router.replace('repo', this.params);
+  }
+
+  async pushRepo(repo) {
+    const color = this.runtime.color;
+    const pushed = this.runtime.git.push(repo.path);
+
+    console.log('');
+
+    if (!pushed.ok) {
+      console.log(color.yellow(pushed.warning));
+    } else {
+      console.log(color.green('Push complete.'));
+      this.runtime.refreshSnapshot();
+    }
+
     await promptLine('Press Enter to continue.');
     await this.router.replace('repo', this.params);
   }

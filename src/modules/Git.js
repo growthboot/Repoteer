@@ -287,6 +287,44 @@ export class Git {
     };
   }
 
+  getUpstreamStatus(repoPath) {
+    const upstream = this.run(['-C', repoPath, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']);
+
+    if (!upstream.ok || !upstream.stdout) {
+      return {
+        ok: true,
+        upstream: null,
+        ahead: 0,
+        behind: 0,
+        warning: null
+      };
+    }
+
+    const counts = this.run(['-C', repoPath, 'rev-list', '--left-right', '--count', upstream.stdout + '...HEAD']);
+
+    if (!counts.ok) {
+      return {
+        ok: false,
+        upstream: upstream.stdout,
+        ahead: 0,
+        behind: 0,
+        warning: counts.stderr || 'Upstream status not available.'
+      };
+    }
+
+    const [behindText, aheadText] = counts.stdout.split(/\s+/);
+    const behind = Number(behindText);
+    const ahead = Number(aheadText);
+
+    return {
+      ok: true,
+      upstream: upstream.stdout,
+      ahead: Number.isFinite(ahead) ? ahead : 0,
+      behind: Number.isFinite(behind) ? behind : 0,
+      warning: null
+    };
+  }
+
   getCurrentBranch(repoPath) {
     const branch = this.run(['-C', repoPath, 'symbolic-ref', '--quiet', '--short', 'HEAD']);
 
