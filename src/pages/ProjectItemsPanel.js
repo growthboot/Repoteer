@@ -1,5 +1,6 @@
 import { spawnSync } from 'child_process';
-import { promptAction, promptLine } from '../utils/input.js';
+import path from 'path';
+import { closeInput, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { formatTable } from '../utils/table.js';
 
@@ -357,8 +358,8 @@ export class ProjectItemsPanel {
     }
 
     if (key === 'x') {
-      const notice = await this.runCommand(command);
-      await this.showCommand(project, index, notice);
+      await this.runCommand(command);
+      await this.returnAfterCommandRun(project, command);
       return;
     }
 
@@ -713,6 +714,7 @@ export class ProjectItemsPanel {
     let notice = this.color.green('Command finished.');
 
     try {
+      closeInput();
       result = spawnSync(command.command, {
         cwd: command.workingDirectory,
         shell: true,
@@ -732,11 +734,73 @@ export class ProjectItemsPanel {
       }
     }
 
+    console.log('');
+    console.log(notice);
+
+    await this.waitForCommandReview();
+
     if (terminal) {
       terminal.enterAlternateScreen();
     }
 
     return notice;
+  }
+
+  async waitForCommandReview() {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      return;
+    }
+
+    process.stdout.write('Press any key to return to Repoteer.');
+
+    await new Promise((resolve) => {
+      const stdin = process.stdin;
+      const wasRaw = stdin.isRaw === true;
+
+      const done = () => {
+        stdin.off('data', done);
+
+        if (typeof stdin.setRawMode === 'function') {
+          stdin.setRawMode(wasRaw);
+        }
+
+        stdin.pause();
+        process.stdout.write('\n');
+        resolve();
+      };
+
+      if (typeof stdin.setRawMode === 'function') {
+        stdin.setRawMode(true);
+      }
+
+      stdin.resume();
+      stdin.once('data', done);
+    });
+  }
+
+  async returnAfterCommandRun(project, command) {
+    const repo = this.findCommandRepo(project, command);
+
+    if (repo && this.router) {
+      await this.router.replace('repo', {
+        projectName: project.name,
+        repoPath: repo.path
+      });
+      return;
+    }
+
+    await this.showProject(project.name);
+  }
+
+  findCommandRepo(project, command) {
+    const commandDirectory = path.resolve(command.workingDirectory ?? '');
+    const repos = project.repos ?? [];
+    const matches = repos.filter((repo) => {
+      const repoPath = path.resolve(repo.path);
+      return commandDirectory === repoPath || commandDirectory.startsWith(repoPath + path.sep);
+    });
+
+    return matches.sort((a, b) => path.resolve(b.path).length - path.resolve(a.path).length)[0] ?? null;
   }
 
   openCommandInTerminal(command) {

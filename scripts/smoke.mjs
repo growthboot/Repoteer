@@ -1636,6 +1636,7 @@ function smokeProjectItemsPath() {
 
 async function smokeProjectCommandRunTerminalModePath() {
   const calls = [];
+  const routed = [];
   const panel = new ProjectItemsPanel({
     runtime: {
       terminal: {
@@ -1658,8 +1659,18 @@ async function smokeProjectCommandRunTerminalModePath() {
         return value;
       }
     },
-    showProject() {}
+    showProject(projectName) {
+      routed.push(['project', projectName]);
+    },
+    router: {
+      async replace(pageName, params) {
+        routed.push([pageName, params.projectName, params.repoPath]);
+      }
+    }
   });
+  panel.waitForCommandReview = async () => {
+    calls.push('review');
+  };
 
   const notice = await panel.runCommand({
     title: 'smoke command',
@@ -1667,8 +1678,34 @@ async function smokeProjectCommandRunTerminalModePath() {
     workingDirectory: root
   });
 
-  assert(calls.join(',') === 'exit,enter', 'command run should leave and restore alternate screen');
+  assert(calls.join(',') === 'exit,review,enter', 'command run should leave alternate screen, pause for review, and restore it');
   assert(notice === 'Command finished.', 'command run should report success after returning');
+
+  await panel.returnAfterCommandRun({
+    name: 'Smoke Project',
+    repos: [
+      { path: path.join(root, 'nested') },
+      { path: root }
+    ]
+  }, {
+    workingDirectory: path.join(root, 'nested', 'app')
+  });
+
+  await panel.returnAfterCommandRun({
+    name: 'Smoke Project',
+    repos: []
+  }, {
+    workingDirectory: root
+  });
+
+  assert(
+    routed.some((entry) => entry[0] === 'repo' && entry[1] === 'Smoke Project' && entry[2] === path.join(root, 'nested')),
+    'command run should return to the matching repo after review'
+  );
+  assert(
+    routed.some((entry) => entry[0] === 'project' && entry[1] === 'Smoke Project'),
+    'command run should fall back to the project when no repo matches'
+  );
 }
 
 function smokeScannerMissingProjectPath() {
