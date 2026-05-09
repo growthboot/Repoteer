@@ -10,19 +10,27 @@ export class AiGateway {
   }
 
   async openRepoTool(router, params) {
+    const repoPath = params.repoPath ?? params.repo?.path;
+    const commitSummaryExcludedPaths = params.toolId === 'commit_message'
+      ? params.settingsStore?.listCommitSummaryExcludedPaths(repoPath)
+        ?? params.settings?.ai?.commitSummaryExcludedPathsByRepo?.[repoPath]
+        ?? []
+      : [];
     const payload = this.buildRepoPayload({
-      repoPath: params.repoPath ?? params.repo?.path,
+      repoPath,
       settings: params.settings,
       maxPromptCharacters: params.maxPromptCharacters,
       toolId: params.toolId,
-      applyMaxPromptCharacters: false
+      applyMaxPromptCharacters: false,
+      excludedPaths: commitSummaryExcludedPaths
     });
 
     await this.openProviderSelection(router, {
       ...params,
       repoName: params.repoName ?? params.repo?.name,
-      repoPath: params.repoPath ?? params.repo?.path,
+      repoPath,
       projectName: params.projectName ?? params.project?.name,
+      commitSummaryExcludedPaths,
       payload
     });
   }
@@ -31,7 +39,7 @@ export class AiGateway {
     await router.open('aiProviderSelect', this.normalizeSelectionParams(params));
   }
 
-  buildRepoPayload({ repoPath, settings, maxPromptCharacters, toolId, applyMaxPromptCharacters = true }) {
+  buildRepoPayload({ repoPath, settings, maxPromptCharacters, toolId, applyMaxPromptCharacters = true, excludedPaths = [] }) {
     const normalizedMaxPromptCharacters = this.getMaxPromptCharacters(maxPromptCharacters, settings);
     const payloadMaxPromptCharacters = applyMaxPromptCharacters ? normalizedMaxPromptCharacters : null;
 
@@ -64,7 +72,8 @@ export class AiGateway {
     return this.aiDiffBuilder.build(repoPath, {
       maxPromptCharacters: normalizedMaxPromptCharacters,
       applyMaxPromptCharacters,
-      includeRecentCommitLogs: toolId === 'commit_message'
+      includeRecentCommitLogs: toolId === 'commit_message',
+      excludedPaths
     });
   }
 
@@ -87,7 +96,8 @@ export class AiGateway {
       settings,
       maxPromptCharacters,
       toolId: selectionParams.toolId,
-      applyMaxPromptCharacters: true
+      applyMaxPromptCharacters: true,
+      excludedPaths: selectionParams.commitSummaryExcludedPaths
     });
 
     return this.normalizeSelectionParams({
@@ -97,7 +107,8 @@ export class AiGateway {
       payloadSize: payload.size,
       maxPromptCharacters: payload.maxPromptCharacters,
       inputSummary: payload.inputSummary,
-      payloadWarnings: payload.warnings
+      payloadWarnings: payload.warnings,
+      commitSummaryExcludedPaths: selectionParams.commitSummaryExcludedPaths
     });
   }
 
@@ -235,6 +246,9 @@ export class AiGateway {
       maxPromptCharacters,
       promptLimitPending: params.promptLimitPending ?? payload.promptLimitPending ?? false,
       inputSummary: String(params.inputSummary ?? payload.inputSummary ?? 'staged, unstaged tracked, and untracked text changes'),
+      commitSummaryExcludedPaths: Array.isArray(params.commitSummaryExcludedPaths)
+        ? params.commitSummaryExcludedPaths
+        : [],
       payloadWarnings: Array.isArray(params.payloadWarnings)
         ? params.payloadWarnings
         : Array.isArray(payload.warnings)

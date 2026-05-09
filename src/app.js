@@ -9,6 +9,7 @@ import { CommitHistoryDetailPage } from './pages/CommitHistoryDetailPage.js';
 import { DiffPage } from './pages/DiffPage.js';
 import { FilePage } from './pages/FilePage.js';
 import { CommitConfirmPage } from './pages/CommitConfirmPage.js';
+import { CommitSummaryExclusionsPage } from './pages/CommitSummaryExclusionsPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { AiSettingsPage } from './pages/AiSettingsPage.js';
 import { AiProviderEditPage } from './pages/AiProviderEditPage.js';
@@ -117,6 +118,7 @@ export async function main(argv = process.argv.slice(2)) {
       diff: DiffPage,
       file: FilePage,
       commitConfirm: CommitConfirmPage,
+      commitSummaryExclusions: CommitSummaryExclusionsPage,
       branch: BranchPage,
       settings: SettingsPage,
       aiSettings: AiSettingsPage,

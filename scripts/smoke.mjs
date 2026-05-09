@@ -7,6 +7,7 @@ import { Scanner } from '../src/modules/Scanner.js';
 import { Router } from '../src/router/Router.js';
 import { DiffPage } from '../src/pages/DiffPage.js';
 import { FilePage } from '../src/pages/FilePage.js';
+import { RepoHistoryPage } from '../src/pages/RepoHistoryPage.js';
 import { ProjectItemsPanel } from '../src/pages/ProjectItemsPanel.js';
 import { ProjectPage } from '../src/pages/ProjectPage.js';
 import { AiGateway } from '../src/modules/AiGateway.js';
@@ -14,6 +15,7 @@ import { AiPromptManager } from '../src/modules/AiPromptManager.js';
 import { AiDiffBuilder } from '../src/modules/AiDiffBuilder.js';
 import { CommitManager } from '../src/modules/CommitManager.js';
 import { PromptsStore } from '../src/storage/PromptsStore.js';
+import { SettingsStore } from '../src/storage/SettingsStore.js';
 import { DEFAULT_PROMPTS } from '../src/data/defaultPrompts.js';
 import { formatTable } from '../src/utils/table.js';
 import { formatActionColumns } from '../src/utils/menu.js';
@@ -388,6 +390,8 @@ function smokeAiDiffBuilderPayloadPath() {
   runGit(['add', 'staged.js'], repoPath);
   fs.writeFileSync(path.join(repoPath, 'unstaged.js'), 'export const unstaged = 2;\n');
   fs.writeFileSync(path.join(repoPath, 'notes.txt'), 'untracked note\nsecond line\n');
+  fs.mkdirSync(path.join(repoPath, 'private'), { recursive: true });
+  fs.writeFileSync(path.join(repoPath, 'private', 'secret.txt'), 'secret generated note\n');
   fs.writeFileSync(path.join(repoPath, 'binary.dat'), Buffer.from([0, 1, 2, 3, 4, 5]));
   fs.writeFileSync(path.join(repoPath, 'base64.txt'), 'A'.repeat(300) + '\n');
   fs.writeFileSync(path.join(repoPath, 'large.js'), Array.from({ length: 120 }, (_, index) => {
@@ -399,6 +403,11 @@ function smokeAiDiffBuilderPayloadPath() {
   const withRecentCommitLogs = builder.build(repoPath, {
     maxPromptCharacters: 30000,
     includeRecentCommitLogs: true
+  });
+  const withExcludedPaths = builder.build(repoPath, {
+    maxPromptCharacters: 30000,
+    includeRecentCommitLogs: true,
+    excludedPaths: ['private']
   });
   const uncapped = builder.build(repoPath, {
     maxPromptCharacters: 900,
@@ -415,7 +424,8 @@ function smokeAiDiffBuilderPayloadPath() {
   const commitMessagePayload = aiGateway.buildRepoPayload({
     repoPath,
     settings: { ai: { globalMaxPromptCharacters: 30000 } },
-    toolId: 'commit_message'
+    toolId: 'commit_message',
+    excludedPaths: ['private/secret.txt']
   });
   const commitReviewPayload = aiGateway.buildRepoPayload({
     repoPath,
@@ -431,6 +441,7 @@ function smokeAiDiffBuilderPayloadPath() {
   assert(full.payload.includes('+export const unstaged = 2;'), 'AI diff payload should include unstaged diff content');
   assert(full.payload.includes('[untracked diff: notes.txt]'), 'AI diff payload should include untracked text-like files');
   assert(full.payload.includes('+untracked note'), 'AI diff payload should include untracked text content');
+  assert(full.payload.includes('[untracked diff: private/secret.txt]'), 'AI diff payload should include untracked text before exclusions');
   assert(full.payload.includes('[Omitted non-text diff: binary.dat]'), 'AI diff payload should mark binary omissions');
   assert(full.payload.includes('[Omitted likely base64 data: base64.txt]'), 'AI diff payload should mark base64-like omissions');
   assert(!full.payload.includes('A'.repeat(160)), 'AI diff payload should not include base64-like content');
@@ -443,7 +454,12 @@ function smokeAiDiffBuilderPayloadPath() {
   assert(withRecentCommitLogs.payload.includes('Body for history 9'), 'commit-message AI payload should include commit bodies');
   assert(withRecentCommitLogs.payload.includes('history commit 2'), 'commit-message AI payload should include the eighth recent commit title');
   assert(!withRecentCommitLogs.payload.includes('history commit 1'), 'commit-message AI payload should include only eight recent commits');
+  assert(withExcludedPaths.ok, withExcludedPaths.warnings.join('\n') || 'AI diff builder should allow excluded paths');
+  assert(!withExcludedPaths.payload.includes('private/secret.txt'), 'excluded paths should not appear in the AI diff payload');
+  assert(!withExcludedPaths.payload.includes('secret generated note'), 'excluded path contents should not appear in the AI diff payload');
+  assert(!withExcludedPaths.payload.includes('Omitted') || !withExcludedPaths.payload.includes('private/secret.txt'), 'excluded paths should not be disclosed as omitted files');
   assert(commitMessagePayload.payload.includes('Recent commit messages (last 8):'), 'gateway should add recent commit logs for commit-message prompts');
+  assert(!commitMessagePayload.payload.includes('private/secret.txt'), 'gateway should pass commit-message excluded paths into payload building');
   assert(!commitReviewPayload.payload.includes('Recent commit messages'), 'gateway should not add recent commit logs for commit-review prompts');
 
   assert(uncapped.ok, uncapped.warnings.join('\n') || 'uncapped AI diff builder should succeed');
@@ -469,6 +485,22 @@ function smokeAiDiffBuilderPayloadPath() {
 
   assert(composedPrompt.length > truncated.maxPromptCharacters, 'AI prompt size limit should apply to user payload only');
   assert(composedPrompt.endsWith(truncated.payload), 'browser prompt should preserve the prepared user payload');
+}
+
+function smokeCommitSummaryExclusionSettingsPath() {
+  const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-settings-exclusions-'));
+  const store = new SettingsStore(storageDir);
+  const repoPath = '/tmp/example-repo';
+
+  assert(store.listCommitSummaryExcludedPaths(repoPath).length === 0, 'commit summary exclusions should default to an empty list');
+  assert(store.addCommitSummaryExcludedPath(repoPath, './private\\secret.txt') === 'private/secret.txt', 'commit summary exclusions should normalize relative paths');
+  assert(store.addCommitSummaryExcludedPath(repoPath, 'private/secret.txt') === 'private/secret.txt', 'commit summary exclusions should accept duplicate saves without growing the list');
+  assert(store.listCommitSummaryExcludedPaths(repoPath).length === 1, 'commit summary exclusions should dedupe paths');
+  assert(store.updateCommitSummaryExcludedPath(repoPath, 0, 'generated') === 'generated', 'commit summary exclusions should update a path by row');
+  assert(store.listCommitSummaryExcludedPaths(repoPath)[0] === 'generated', 'commit summary exclusions should persist updated paths');
+  assert(store.deleteCommitSummaryExcludedPath(repoPath, 0), 'commit summary exclusions should delete a path by row');
+  assert(store.listCommitSummaryExcludedPaths(repoPath).length === 0, 'commit summary exclusions should persist deletes');
+  assert(store.addCommitSummaryExcludedPath(repoPath, '../outside') === null, 'commit summary exclusions should reject parent-relative paths');
 }
 
 function smokeAiProviderSelectBrowserPath() {
@@ -1761,6 +1793,7 @@ function smokeDiffFormatting() {
 function smokeDiffPagesUseNormalScroll() {
   assert(DiffPage.scrollMode === 'normal', 'full diff page should use normal terminal scrollback');
   assert(FilePage.scrollMode === 'normal', 'file diff page should use normal terminal scrollback');
+  assert(RepoHistoryPage.scrollMode === 'normal', 'repo history page should use normal terminal scrollback');
 }
 
 async function smokeRouterTerminalModePath() {
@@ -1996,6 +2029,7 @@ function smokeRepoPageOpenAndDiffPath() {
   assert(result.stdout.includes('Repo: Repo Page Project / frontend'), 'repo page should render selected repo title');
   assert(result.stdout.includes('Push: no upstream'), 'repo page should render push status');
   assert(result.stdout.includes('V. View full diff'), 'repo page should render view diff action');
+  assert(result.stdout.includes('X. Commit summary exclusions'), 'repo page should render commit summary exclusions action');
   assert(result.stdout.includes('F. Hotfix commit & push'), 'repo page should render hotfix action');
   assert(result.stdout.includes('Repo: frontend (diff)'), 'diff page should render title');
   assert(result.stdout.includes('+const next = 2;'), 'diff page should render changed line');
@@ -2078,7 +2112,8 @@ function smokeRepoHistoryPath() {
   assert(result.stdout.includes('History: History Project / frontend'), 'history page should render title');
   assert(result.stdout.includes('Page: 1'), 'history page should render first page');
   assert(result.stdout.includes('Page: 2'), 'history page should render second page');
-  assert(result.stdout.includes('1.') && result.stdout.includes('10.'), 'history page should render page-local numbers');
+  assert(result.stdout.includes('1.') && result.stdout.includes('5.'), 'history page should render five page-local numbers');
+  assert(!/^6\. /m.test(output), 'history page should not render more than five commits per page');
   assert(result.stdout.includes('history commit 12'), 'history page should render newest commit title');
   assert(result.stdout.includes('Body for history 12'), 'history page should render commit body');
   assert(/^1\. \d{4}-\d{2}-\d{2} [a-f0-9]+ \+1 \/ -0$/m.test(output), 'history item should render date, history id, and line stats on the first row');
@@ -2086,10 +2121,10 @@ function smokeRepoHistoryPath() {
   assert(/^Body: Body for history 12 starts here/m.test(output), 'history item should render body on the third row');
   assert(/^ {6}.+readability\.$/m.test(output), 'history body should wrap with continuation indentation');
   assert(/readability\.\n\n2\. /m.test(output), 'history items should be separated by a blank line');
-  assert(result.stdout.includes('history commit 2'), 'second page should render older commit title');
+  assert(result.stdout.includes('history commit 7'), 'second page should render older commit title');
   assert(result.stdout.includes('Commit: History Project / frontend'), 'commit history detail should render title');
-  assert(result.stdout.includes('Title: history commit 2'), 'commit detail should preserve selected commit title');
-  assert(result.stdout.includes('history-2.txt'), 'commit detail should render changed file');
+  assert(result.stdout.includes('Title: history commit 7'), 'commit detail should preserve selected commit title');
+  assert(result.stdout.includes('history-7.txt'), 'commit detail should render changed file');
   assert(result.stdout.includes('+1 / -0'), 'commit detail should render changed file stats');
   assert(!result.stdout.includes('diff --git'), 'repo history path should not render historical patch diffs');
 }
@@ -2417,6 +2452,7 @@ smokeSettingsToggleColorPath();
 smokeAiSettingsPersistencePath();
 smokeAiPromptEditingPath();
 smokeAiDiffBuilderPayloadPath();
+smokeCommitSummaryExclusionSettingsPath();
 smokeAiProviderSelectBrowserPath();
 smokeAiProviderSelectWarningPath();
 smokeAiProviderSelectSettingsPath();

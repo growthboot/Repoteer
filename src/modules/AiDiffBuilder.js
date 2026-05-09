@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { pathMatchesAnyRelativeFilter, normalizeRelativePathList } from '../utils/pathFilters.js';
 
 const TRUNCATION_MARKER = '...TRUNCATED_DIFF_DATA...';
 const DEFAULT_MAX_PROMPT_CHARACTERS = 15000;
@@ -17,6 +18,7 @@ export class AiDiffBuilder {
   build(repoPath, options = {}) {
     const maxPromptCharacters = normalizeMaxPromptCharacters(options.maxPromptCharacters);
     const applyMaxPromptCharacters = options.applyMaxPromptCharacters !== false;
+    const excludedPaths = normalizeRelativePathList(options.excludedPaths);
     const recentCommitLogs = options.includeRecentCommitLogs === true
       ? this.getRecentCommitLogs(repoPath, RECENT_COMMIT_LOG_LIMIT)
       : null;
@@ -44,15 +46,15 @@ export class AiDiffBuilder {
 
     const parts = [];
 
-    for (const file of staged.files) {
+    for (const file of this.filterExcludedFiles(staged.files, excludedPaths)) {
       parts.push(this.buildTrackedPart(repoPath, file, 'staged'));
     }
 
-    for (const file of unstaged.files) {
+    for (const file of this.filterExcludedFiles(unstaged.files, excludedPaths)) {
       parts.push(this.buildTrackedPart(repoPath, file, 'unstaged'));
     }
 
-    for (const file of untracked.files) {
+    for (const file of this.filterExcludedFiles(untracked.files, excludedPaths)) {
       parts.push(this.buildUntrackedPart(repoPath, file));
     }
 
@@ -133,6 +135,14 @@ export class AiDiffBuilder {
       files: this.git.parseLines(result.stdout),
       warning: null
     };
+  }
+
+  filterExcludedFiles(files, excludedPaths) {
+    if (excludedPaths.length === 0) {
+      return files;
+    }
+
+    return files.filter((file) => !pathMatchesAnyRelativeFilter(file, excludedPaths));
   }
 
   getRecentCommitLogs(repoPath, limit) {

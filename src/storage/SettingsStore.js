@@ -5,6 +5,7 @@ import {
   DEFAULT_AI_PROVIDERS,
   DEFAULT_SETTINGS
 } from '../data/defaultSettings.js';
+import { normalizeRelativePath, normalizeRelativePathList } from '../utils/pathFilters.js';
 
 export class SettingsStore {
   constructor(storageDir) {
@@ -115,6 +116,92 @@ export class SettingsStore {
 
     return next.ai.providers[index];
   }
+
+  listCommitSummaryExcludedPaths(repoPath) {
+    const key = normalizeRepoPathKey(repoPath);
+
+    if (!key) {
+      return [];
+    }
+
+    return this.get().ai.commitSummaryExcludedPathsByRepo[key] ?? [];
+  }
+
+  addCommitSummaryExcludedPath(repoPath, relativePath) {
+    const key = normalizeRepoPathKey(repoPath);
+    const normalizedPath = normalizeRelativePath(relativePath);
+
+    if (!key || !normalizedPath) {
+      return null;
+    }
+
+    const next = this.get();
+    const current = next.ai.commitSummaryExcludedPathsByRepo[key] ?? [];
+
+    if (!current.includes(normalizedPath)) {
+      next.ai.commitSummaryExcludedPathsByRepo[key] = [...current, normalizedPath];
+      this.store.write(next);
+    }
+
+    return normalizedPath;
+  }
+
+  updateCommitSummaryExcludedPath(repoPath, index, relativePath) {
+    const key = normalizeRepoPathKey(repoPath);
+    const normalizedPath = normalizeRelativePath(relativePath);
+
+    if (!key || !normalizedPath) {
+      return null;
+    }
+
+    const next = this.get();
+    const current = next.ai.commitSummaryExcludedPathsByRepo[key] ?? [];
+
+    if (index < 0 || index >= current.length) {
+      return null;
+    }
+
+    const updated = [...current];
+    updated[index] = normalizedPath;
+    next.ai.commitSummaryExcludedPathsByRepo[key] = normalizeRelativePathList(updated);
+    this.store.write(next);
+
+    return normalizedPath;
+  }
+
+  deleteCommitSummaryExcludedPath(repoPath, index) {
+    const key = normalizeRepoPathKey(repoPath);
+
+    if (!key) {
+      return false;
+    }
+
+    const next = this.get();
+    const current = next.ai.commitSummaryExcludedPathsByRepo[key] ?? [];
+
+    if (index < 0 || index >= current.length) {
+      return false;
+    }
+
+    next.ai.commitSummaryExcludedPathsByRepo[key] = current.filter((_, itemIndex) => itemIndex !== index);
+    this.store.write(next);
+
+    return true;
+  }
+
+  clearCommitSummaryExcludedPaths(repoPath) {
+    const key = normalizeRepoPathKey(repoPath);
+
+    if (!key) {
+      return false;
+    }
+
+    const next = this.get();
+    next.ai.commitSummaryExcludedPathsByRepo[key] = [];
+    this.store.write(next);
+
+    return true;
+  }
 }
 
 function normalizeSettings(settings) {
@@ -160,8 +247,30 @@ function normalizeAiSettings(ai) {
 
   return {
     globalMaxPromptCharacters,
-    providers
+    providers,
+    commitSummaryExcludedPathsByRepo: normalizeCommitSummaryExcludedPathsByRepo(
+      source.commitSummaryExcludedPathsByRepo
+    )
   };
+}
+
+function normalizeCommitSummaryExcludedPathsByRepo(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  const next = {};
+
+  Object.entries(value).forEach(([repoPath, paths]) => {
+    const key = normalizeRepoPathKey(repoPath);
+    const normalizedPaths = normalizeRelativePathList(paths);
+
+    if (key && normalizedPaths.length > 0) {
+      next[key] = normalizedPaths;
+    }
+  });
+
+  return next;
 }
 
 function normalizeProvider(provider, globalMaxPromptCharacters) {
@@ -204,4 +313,8 @@ function normalizeInteger(value, fallback) {
 
 function createProviderId(type) {
   return type + '-' + String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
+}
+
+function normalizeRepoPathKey(repoPath) {
+  return String(repoPath ?? '').trim();
 }

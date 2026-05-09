@@ -54,6 +54,7 @@ export class RepoPage {
       color.bold('A.') + ' Commit review',
       color.bold('E.') + ' Security review',
       color.bold('M.') + ' Generate commit',
+      color.bold('X.') + ' Commit summary exclusions',
       color.bold('F.') + ' Hotfix commit & push',
       color.bold('P.') + ' Write a commit & push',
       ...(repo.ahead > 0 ? [color.bold('U.') + ' Push unpushed commits'] : []),
@@ -131,6 +132,14 @@ export class RepoPage {
 
     if (key === 'm') {
       await this.openAiTool(project, repo, 'commit_message');
+      return;
+    }
+
+    if (key === 'x') {
+      await this.router.open('commitSummaryExclusions', {
+        projectName: project.name,
+        repoPath: repo.path
+      });
       return;
     }
 
@@ -252,6 +261,7 @@ export class RepoPage {
       project,
       repo,
       settings: this.runtime.settings,
+      settingsStore: this.runtime.settingsStore,
       returnPage: 'repo'
     });
   }

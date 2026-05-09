@@ -3,11 +3,13 @@ import { promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { stripAnsi } from '../utils/color.js';
 
-const HISTORY_PAGE_SIZE = 10;
+const HISTORY_PAGE_SIZE = 5;
 const BODY_LABEL = 'Body: ';
 const BODY_MAX_WIDTH = 96;
 
 export class RepoHistoryPage {
+  static scrollMode = 'normal';
+
   constructor({ runtime, router, params }) {
     this.runtime = runtime;
     this.router = router;
