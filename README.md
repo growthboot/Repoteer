@@ -1,102 +1,103 @@
 # Repoteer
 
-**Repoteer — See everything changing across your projects.**
+**Project-level Git change navigation for people working across multiple repos.**
 
-Repoteer is a CLI for navigating code changes across multiple projects and repositories.
+Repoteer is a local-first terminal app that shows what is changing across your projects, then lets you drill from project to repo to file diff without opening every repository one by one.
 
-It gives you a real-time overview of where changes are happening, and lets you zoom from project → repo → diff instantly.
+It is built for developers who keep several projects active at once and need a fast answer to: **where should I look first?**
 
-Repoteer helps you answer:
+## Features
 
-* Which projects are active right now?
-* Where are the largest changes?
-* What should I review first?
-* What tools, commands, and context are tied to this project?
+- Track multiple local projects from one CLI
+- Automatically discover Git repositories inside each project
+- See added, removed, net, modified file, branch, and commit recency data
+- Drill down from project list to project, repo, file, diff, and commit history views
+- Copy full diffs or file diffs to the clipboard
+- Switch existing local branches with dirty-repo warnings
+- Save project-level bookmarks, commands, and clipboard snippets
+- Archive, pin, rename, and delete Repoteer project entries without deleting files
+- Generate optional AI-assisted commit reviews, commit messages, diff summaries, and security reviews
 
-Repoteer is not a repo-level Git UI like lazygit. It sits above your repositories and helps you move across projects.
-
----
-
-## Core Features
-
-* Track multiple local projects
-* Scan projects for Git repositories automatically
-* Show change volume (+ / - lines) across all projects
-* Drill down from project → repo → diff
-* Fast keyboard-driven navigation
-
----
-
-## Optional Features
-
-* Generate AI summaries from diffs
-* Generate commit message suggestions
-* Copy diffs for external tools (ChatGPT, etc.)
-* Save bookmarks related to projects
-* Save commands related to projects
-
-AI is optional. Repoteer is fully usable without it.
-
----
-
-## Why Repoteer exists
-
-You don’t have one repo anymore.
-
-You have multiple projects, each with multiple repos, all changing at the same time.
-
-There’s no good way to answer:
-
-* What changed today across all my projects?
-* Which project is actually active?
-* Where should I look first?
-* What needs to be committed right now?
-
-You’re missing a clear, project-level view.
-
-Repoteer fixes that.
-
-Open it, and you immediately see where changes are happening across your projects, and can drill straight into what matters.
-
----
+Repoteer does not replace repo-level Git tools like lazygit. It sits one level above them: lazygit helps you operate inside a repo; Repoteer helps you decide which project or repo deserves attention.
 
 ## Install
 
-```bash
-# coming soon
-```
+Repoteer is a Node.js CLI.
 
----
+Clone the repository, link the package, then run Repoteer:
+
+    git clone https://github.com/growthboot/repoteer.git
+    cd repoteer
+    npm link
+    repoteer
+
+For local development without linking:
+
+    npm start
+
+## Requirements
+
+- Node.js with ES module support
+- Git available on your PATH
+- A basic terminal
+
+Repoteer stores its local data in `~/.repoteer/storage`.
+
+It does not scan at install time and does not modify your shell profile.
 
 ## Usage
 
-```bash
-repoteer
-```
+Start Repoteer with `repoteer`.
 
----
+Add a project from the home screen with `A. Add project`.
 
-## Philosophy
+A project path must be absolute and must already exist. Repoteer scans that path for Git repositories and shows change totals across the discovered repos.
 
-Repoteer is:
+Common navigation:
 
-* Fast
-* Local-only
-* Project-oriented
-* Focused on project-level git awareness
+- `H` Home
+- `R` Refresh
+- `S` Settings
+- `B` Back
+- `Q` Quit
 
-Repoteer is not:
+Typical flow: `Projects -> Project -> Repo -> File/Diff`.
 
-* A repo-level Git UI (like lazygit)
-* A batch automation tool
-* A full Git management interface
+## AI support
 
-Another way to look at it:
-lazygit → operate inside a repo
-Repoteer → decide which project / repo to even open
+AI features are optional.
 
----
+Repoteer can prepare grounded prompts from your local Git diffs for commit review, commit message generation, diff summary, and security review.
+
+Supported provider styles include browser-based tools and local OpenAI-compatible chat endpoints such as LM Studio or Ollama. AI output is advisory. Repoteer does not let AI stage, commit, push, or edit files directly.
+
+## Safety model
+
+Repoteer is intentionally narrow:
+
+- Local project data stays on your machine
+- Project deletion only removes Repoteer’s saved project entry
+- Git commit actions require confirmation before writing Git data
+- Push actions require a separate confirmation step
+- Branch switching is limited to existing local branches
+- Git failures are shown as warnings instead of being hidden or auto-resolved
+
+## Development
+
+Run syntax checks and smoke tests with `npm run check` and `npm run smoke`.
+
+The package entrypoint is `bin/repoteer.js`.
+
+The app runtime starts at `src/app.js`.
+
+## Project status
+
+Repoteer is early, usable, and actively evolving. The core direction is stable: project-level Git awareness, fast keyboard navigation, and local-first behavior.
+
+## Contributing
+
+Issues, ideas are welcome. Pull requests are not accepted without prior authorization.
 
 ## License
 
-MIT
+Repoteer is free and open-source software released under the MIT License. See [LICENSE](LICENSE).
