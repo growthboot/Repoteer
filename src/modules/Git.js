@@ -197,7 +197,7 @@ export class Git {
       'log',
       '--skip=' + String(page * pageSize),
       '--max-count=' + String(pageSize + 1),
-      '--format=%H%x1f%h%x1f%cs%x1f%s%x1f%b%x1e'
+      '--format=%H%x1f%h%x1f%ct%x1f%s%x1f%b%x1e'
     ]);
 
     if (!result.ok) {
@@ -446,14 +446,17 @@ export class Git {
         const parts = record.split('\x1f');
         const hash = parts[0] ?? '';
         const shortHash = parts[1] ?? hash.slice(0, 7);
-        const date = parts[2] ?? '';
+        const timestampSeconds = Number(parts[2] ?? '');
+        const timestamp = Number.isFinite(timestampSeconds) ? timestampSeconds * 1000 : null;
         const title = parts[3] ?? '';
         const body = parts.slice(4).join('\x1f');
 
         return {
           hash,
           shortHash,
-          date,
+          timestamp,
+          date: timestamp === null ? '' : this.formatHistoryTimestamp(timestamp),
+          age: timestamp === null ? '' : this.formatHistoryAge(Date.now() - timestamp),
           title,
           body: this.normalizeCommitBody(body)
         };
@@ -523,6 +526,47 @@ export class Git {
     }
 
     return String(Math.floor(days / 365)) + 'y ago';
+  }
+
+  formatHistoryTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    const year = String(date.getFullYear());
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+
+    return year + '-' + month + '-' + day + ' ' + hours + ':' + minutes;
+  }
+
+  formatHistoryAge(milliseconds) {
+    const minutes = Math.max(0, Math.floor(milliseconds / 60000));
+
+    if (minutes < 1) {
+      return 'just now';
+    }
+
+    if (minutes < 60) {
+      return this.pluralizeHistoryAge(minutes, 'minute');
+    }
+
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+      return this.pluralizeHistoryAge(hours, 'hour');
+    }
+
+    const days = Math.floor(hours / 24);
+
+    if (days < 365) {
+      return this.pluralizeHistoryAge(days, 'day');
+    }
+
+    return this.pluralizeHistoryAge(Math.floor(days / 365), 'year');
+  }
+
+  pluralizeHistoryAge(value, unit) {
+    return String(value) + ' ' + unit + (value === 1 ? '' : 's') + ' ago';
   }
 
   formatFileStatus(output) {

@@ -107,8 +107,9 @@ export class RepoHistoryPage {
       const number = hotkey(String(index + 1) + '.');
       const stats = color.green('+' + String(commit.added ?? 0)) + ' / ' + color.red('-' + String(commit.removed ?? 0));
       const bodyLines = this.wrapText(commit.body || '', bodyWidth);
+      const date = commit.age ? commit.date + ' (' + commit.age + ')' : commit.date;
 
-      console.log(number + ' ' + commit.date + ' ' + commit.shortHash + ' ' + stats);
+      console.log(number + ' ' + date + ' ' + commit.shortHash + ' ' + stats);
       console.log('Title: ' + (commit.title || '(no title)'));
       console.log(BODY_LABEL + bodyLines[0]);
 

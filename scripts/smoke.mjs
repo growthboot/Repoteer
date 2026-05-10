@@ -2153,7 +2153,7 @@ function smokeRepoHistoryPath() {
   assert(!/^6\. /m.test(output), 'history page should not render more than five commits per page');
   assert(result.stdout.includes('history commit 12'), 'history page should render newest commit title');
   assert(result.stdout.includes('Body for history 12'), 'history page should render commit body');
-  assert(/^1\. \d{4}-\d{2}-\d{2} [a-f0-9]+ \+1 \/ -0$/m.test(output), 'history item should render date, history id, and line stats on the first row');
+  assert(/^1\. \d{4}-\d{2}-\d{2} \d{2}:\d{2} \((?:just now|\d+ (?:minute|hour|day|year)s? ago)\) [a-f0-9]+ \+1 \/ -0$/m.test(output), 'history item should render date, time, ago time, history id, and line stats on the first row');
   assert(/^Title: history commit 12$/m.test(output), 'history item should render title on the second row');
   assert(/^Body: Body for history 12 starts here/m.test(output), 'history item should render body on the third row');
   assert(/^ {6}.+readability\.$/m.test(output), 'history body should wrap with continuation indentation');
