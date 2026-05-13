@@ -50,6 +50,7 @@ export class ProjectsPage {
       'T. ' + (hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes'),
       'A. Add project',
       'V. View archive',
+      'Y. History',
       '[0-9]P. Pin/unpin project',
       '[0-9]A. Archive project',
       ...this.router.globalActionItems(color, { back: false })
@@ -71,6 +72,13 @@ export class ProjectsPage {
 
     if (key === 'v') {
       await this.router.open('archive');
+      return;
+    }
+
+    if (key === 'y') {
+      await this.router.open('projectsHistory', {
+        page: 0
+      });
       return;
     }
 

@@ -9,6 +9,7 @@ import { DiffPage } from '../src/pages/DiffPage.js';
 import { FilePage } from '../src/pages/FilePage.js';
 import { RepoHistoryPage } from '../src/pages/RepoHistoryPage.js';
 import { ProjectHistoryPage } from '../src/pages/ProjectHistoryPage.js';
+import { ProjectsHistoryPage } from '../src/pages/ProjectsHistoryPage.js';
 import { ProjectItemsPanel } from '../src/pages/ProjectItemsPanel.js';
 import { ProjectPage } from '../src/pages/ProjectPage.js';
 import { AiGateway } from '../src/modules/AiGateway.js';
@@ -1855,6 +1856,7 @@ function smokeDiffPagesUseNormalScroll() {
   assert(FilePage.scrollMode === 'normal', 'file diff page should use normal terminal scrollback');
   assert(RepoHistoryPage.scrollMode === 'normal', 'repo history page should use normal terminal scrollback');
   assert(ProjectHistoryPage.scrollMode === 'normal', 'project history page should use normal terminal scrollback');
+  assert(ProjectsHistoryPage.scrollMode === 'normal', 'projects history page should use normal terminal scrollback');
 }
 
 async function smokeRouterTerminalModePath() {
@@ -2251,6 +2253,84 @@ function smokeProjectHistoryPath() {
   assert(!result.stdout.includes('diff --git'), 'project history path should not render historical patch diffs');
 }
 
+function smokeProjectsHistoryPath() {
+  if (!gitAvailable()) {
+    console.log('smoke projects history skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const alphaPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-projects-history-alpha-'));
+  const betaPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-projects-history-beta-'));
+  const archivePath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-projects-history-archive-'));
+  const alphaRepoPath = path.join(alphaPath, 'api');
+  const betaRepoPath = path.join(betaPath, 'web');
+  const archiveRepoPath = path.join(archivePath, 'old');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(alphaRepoPath);
+  fs.writeFileSync(path.join(alphaRepoPath, 'seed.txt'), 'seed\n');
+  commitAllAt(alphaRepoPath, 'seed alpha projects history', '2024-01-01T00:00:00Z');
+
+  initGitRepo(betaRepoPath);
+  fs.writeFileSync(path.join(betaRepoPath, 'seed.txt'), 'seed\n');
+  commitAllAt(betaRepoPath, 'seed beta projects history', '2024-01-01T00:00:00Z');
+
+  initGitRepo(archiveRepoPath);
+  fs.writeFileSync(path.join(archiveRepoPath, 'seed.txt'), 'seed\n');
+  commitAllAt(archiveRepoPath, 'archived newest projects history', '2024-02-01T00:00:00Z');
+
+  const commits = [
+    { repoPath: alphaRepoPath, projectName: 'Alpha History', repoName: 'api', index: 1, date: '2024-01-02T00:00:00Z' },
+    { repoPath: betaRepoPath, projectName: 'Beta History', repoName: 'web', index: 2, date: '2024-01-03T00:00:00Z' },
+    { repoPath: alphaRepoPath, projectName: 'Alpha History', repoName: 'api', index: 3, date: '2024-01-04T00:00:00Z' },
+    { repoPath: betaRepoPath, projectName: 'Beta History', repoName: 'web', index: 4, date: '2024-01-05T00:00:00Z' },
+    { repoPath: alphaRepoPath, projectName: 'Alpha History', repoName: 'api', index: 5, date: '2024-01-06T00:00:00Z' },
+    { repoPath: betaRepoPath, projectName: 'Beta History', repoName: 'web', index: 6, date: '2024-01-07T00:00:00Z' },
+    { repoPath: alphaRepoPath, projectName: 'Alpha History', repoName: 'api', index: 7, date: '2024-01-08T00:00:00Z' }
+  ];
+
+  commits.forEach((commit) => {
+    fs.writeFileSync(path.join(commit.repoPath, 'projects-aggregate-' + String(commit.index) + '.txt'), 'line ' + String(commit.index) + '\n');
+    commitAllAt(
+      commit.repoPath,
+      'projects aggregate ' + commit.projectName + ' ' + commit.repoName + ' ' + String(commit.index),
+      commit.date,
+      'Body for projects aggregate ' + String(commit.index)
+    );
+  });
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Alpha History', path: alphaPath, shortcut: null, archived: false },
+    { name: 'Beta History', path: betaPath, shortcut: null, archived: false },
+    { name: 'Archived History', path: archivePath, shortcut: null, archived: true }
+  ], null, 2) + '\n');
+
+  const result = runApp(['y', 'n', '1', 'b', 'p', 'b', 'q'].join('\n') + '\n', home, [], {
+    COLUMNS: '110'
+  });
+  const output = stripAnsi(result.stdout);
+
+  assert(result.status === 0, result.stderr || 'projects history path failed');
+  assert(result.stdout.includes('Y. History'), 'projects page should render top-level history action');
+  assert(result.stdout.includes('History: Projects'), 'projects history page should render title');
+  assert(result.stdout.includes('Page: 1'), 'projects history page should render first page');
+  assert(result.stdout.includes('Page: 2'), 'projects history page should render second page');
+  assert(result.stdout.includes('projects aggregate Alpha History api 7'), 'projects history should render newest active project commit');
+  assert(result.stdout.includes('projects aggregate Beta History web 6'), 'projects history should render commits from second active project repo');
+  assert(result.stdout.includes('projects aggregate Beta History web 2'), 'projects history second page should render older aggregate commit');
+  assert(!result.stdout.includes('archived newest projects history'), 'projects history should exclude archived projects');
+  assert(/^1\. \d{4}-\d{2}-\d{2} \d{2}:\d{2} \(.+ ago\) Alpha History \/ api [a-f0-9]+ \+1 \/ -0$/m.test(output), 'projects history item should render project name, repo name, history id, and line stats');
+  assert(/Title: projects aggregate Alpha History api 7[\s\S]*Title: projects aggregate Beta History web 6[\s\S]*Title: projects aggregate Alpha History api 5/.test(output), 'projects history should aggregate commits ordered by date');
+  assert(!/^6\. /m.test(output), 'projects history page should not render more than five commits per page');
+  assert(result.stdout.includes('Commit: Beta History / web'), 'projects history detail should open the selected project/repo commit');
+  assert(result.stdout.includes('Title: projects aggregate Beta History web 2'), 'projects history detail should preserve selected commit title');
+  assert(result.stdout.includes('projects-aggregate-2.txt'), 'projects history detail should render changed file');
+  assert(!result.stdout.includes('diff --git'), 'projects history path should not render historical patch diffs');
+}
+
+
 function smokeAiToolEntryPointsPath() {
   if (!gitAvailable()) {
     console.log('smoke AI tool entry points skipped: git unavailable');
@@ -2615,6 +2695,7 @@ smokeRepoPageOpenAndDiffPath();
 smokeRepoPageUnpushedPushPath();
 smokeRepoHistoryPath();
 smokeProjectHistoryPath();
+smokeProjectsHistoryPath();
 smokeAiToolEntryPointsPath();
 smokeRepoFilePagePath();
 smokeRepoHotfixConfirmPath();
