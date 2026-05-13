@@ -70,6 +70,7 @@ export class ProjectPage {
       color.bold('D.') + ' Delete project',
       color.bold('N.') + ' Rename project',
       color.bold('C.') + ' Copy Project Path',
+      color.bold('Y.') + ' History',
       ...this.router.globalActionItems(color)
     ], { color }).forEach((row) => console.log(row));
     console.log('');
@@ -84,6 +85,14 @@ export class ProjectPage {
     if (key === 't') {
       this.runtime.projectsPageHideReposWithoutLineChanges = !hideReposWithoutLineChanges;
       await this.router.replace('project', { projectName: project.name });
+      return;
+    }
+
+    if (key === 'y') {
+      await this.router.open('projectHistory', {
+        projectName: project.name,
+        page: 0
+      });
       return;
     }
 

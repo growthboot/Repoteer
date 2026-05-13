@@ -8,6 +8,7 @@ import { Router } from '../src/router/Router.js';
 import { DiffPage } from '../src/pages/DiffPage.js';
 import { FilePage } from '../src/pages/FilePage.js';
 import { RepoHistoryPage } from '../src/pages/RepoHistoryPage.js';
+import { ProjectHistoryPage } from '../src/pages/ProjectHistoryPage.js';
 import { ProjectItemsPanel } from '../src/pages/ProjectItemsPanel.js';
 import { ProjectPage } from '../src/pages/ProjectPage.js';
 import { AiGateway } from '../src/modules/AiGateway.js';
@@ -91,6 +92,28 @@ function commitAll(repoPath, message, body = '') {
   }
 
   runGit(args, repoPath);
+}
+
+function commitAllAt(repoPath, message, date, body = '') {
+  runGit(['add', '.'], repoPath);
+
+  const args = ['-c', 'user.name=Repoteer Smoke', '-c', 'user.email=smoke@example.com', 'commit', '-m', message];
+
+  if (body) {
+    args.push('-m', body);
+  }
+
+  const result = spawnSync('git', args, {
+    cwd: repoPath,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: date,
+      GIT_COMMITTER_DATE: date
+    }
+  });
+
+  assert(result.status === 0, result.stderr || result.stdout || 'git dated commit failed: git ' + args.join(' '));
 }
 
 function readGitState(repoPath) {
@@ -1831,6 +1854,7 @@ function smokeDiffPagesUseNormalScroll() {
   assert(DiffPage.scrollMode === 'normal', 'full diff page should use normal terminal scrollback');
   assert(FilePage.scrollMode === 'normal', 'file diff page should use normal terminal scrollback');
   assert(RepoHistoryPage.scrollMode === 'normal', 'repo history page should use normal terminal scrollback');
+  assert(ProjectHistoryPage.scrollMode === 'normal', 'project history page should use normal terminal scrollback');
 }
 
 async function smokeRouterTerminalModePath() {
@@ -2164,6 +2188,67 @@ function smokeRepoHistoryPath() {
   assert(result.stdout.includes('history-7.txt'), 'commit detail should render changed file');
   assert(result.stdout.includes('+1 / -0'), 'commit detail should render changed file stats');
   assert(!result.stdout.includes('diff --git'), 'repo history path should not render historical patch diffs');
+}
+
+function smokeProjectHistoryPath() {
+  if (!gitAvailable()) {
+    console.log('smoke project history skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-project-history-project-'));
+  const frontendPath = path.join(projectPath, 'frontend');
+  const backendPath = path.join(projectPath, 'backend');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(frontendPath);
+  fs.writeFileSync(path.join(frontendPath, 'seed.txt'), 'seed\n');
+  commitAllAt(frontendPath, 'seed frontend history', '2024-01-01T00:00:00Z');
+
+  initGitRepo(backendPath);
+  fs.writeFileSync(path.join(backendPath, 'seed.txt'), 'seed\n');
+  commitAllAt(backendPath, 'seed backend history', '2024-01-01T00:00:00Z');
+
+  const commits = [
+    { repoPath: backendPath, repoName: 'backend', index: 1, date: '2024-01-02T00:00:00Z' },
+    { repoPath: frontendPath, repoName: 'frontend', index: 2, date: '2024-01-03T00:00:00Z' },
+    { repoPath: backendPath, repoName: 'backend', index: 3, date: '2024-01-04T00:00:00Z' },
+    { repoPath: frontendPath, repoName: 'frontend', index: 4, date: '2024-01-05T00:00:00Z' },
+    { repoPath: backendPath, repoName: 'backend', index: 5, date: '2024-01-06T00:00:00Z' },
+    { repoPath: frontendPath, repoName: 'frontend', index: 6, date: '2024-01-07T00:00:00Z' },
+    { repoPath: backendPath, repoName: 'backend', index: 7, date: '2024-01-08T00:00:00Z' }
+  ];
+
+  commits.forEach((commit) => {
+    fs.writeFileSync(path.join(commit.repoPath, 'aggregate-' + String(commit.index) + '.txt'), 'line ' + String(commit.index) + '\n');
+    commitAllAt(commit.repoPath, 'aggregate ' + commit.repoName + ' ' + String(commit.index), commit.date, 'Body for aggregate ' + String(commit.index));
+  });
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Aggregate History', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+
+  const result = runApp(['1', 'y', 'n', '1', 'b', 'b', 'q'].join('\n') + '\n', home, [], {
+    COLUMNS: '90'
+  });
+  const output = stripAnsi(result.stdout);
+
+  assert(result.status === 0, result.stderr || 'project history path failed');
+  assert(result.stdout.includes('History: Aggregate History'), 'project history page should render title');
+  assert(result.stdout.includes('Page: 1'), 'project history page should render first page');
+  assert(result.stdout.includes('Page: 2'), 'project history page should render second page');
+  assert(result.stdout.includes('aggregate backend 7'), 'project history should render newest commit from backend');
+  assert(result.stdout.includes('aggregate frontend 6'), 'project history should render commits from frontend');
+  assert(result.stdout.includes('aggregate frontend 2'), 'project history second page should render older aggregate commit');
+  assert(/^1\. \d{4}-\d{2}-\d{2} \d{2}:\d{2} \(.+ ago\) backend [a-f0-9]+ \+1 \/ -0$/m.test(output), 'project history item should render repo name, history id, and line stats');
+  assert(/Title: aggregate backend 7[\s\S]*Title: aggregate frontend 6[\s\S]*Title: aggregate backend 5/.test(output), 'project history should aggregate commits ordered by date');
+  assert(!/^6\. /m.test(output), 'project history page should not render more than five commits per page');
+  assert(result.stdout.includes('Commit: Aggregate History / frontend'), 'project history detail should open the selected repo commit');
+  assert(result.stdout.includes('Title: aggregate frontend 2'), 'project history detail should preserve selected commit title');
+  assert(result.stdout.includes('aggregate-2.txt'), 'project history detail should render changed file');
+  assert(!result.stdout.includes('diff --git'), 'project history path should not render historical patch diffs');
 }
 
 function smokeAiToolEntryPointsPath() {
@@ -2529,6 +2614,7 @@ smokeCommitConfirmAutoPushPath();
 smokeRepoPageOpenAndDiffPath();
 smokeRepoPageUnpushedPushPath();
 smokeRepoHistoryPath();
+smokeProjectHistoryPath();
 smokeAiToolEntryPointsPath();
 smokeRepoFilePagePath();
 smokeRepoHotfixConfirmPath();
