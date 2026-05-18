@@ -1615,6 +1615,23 @@ function smokeProjectItemsPath() {
   assert(clipboardItems[0].text === 'First clipboard line\nSecond clipboard line', 'clipboard item text mismatch');
   assert(fs.readFileSync(clipboardFile, 'utf8') === 'First clipboard line\nSecond clipboard line', 'clipboard copied text mismatch');
 
+  const bookmarkCopyInput = [
+    '1',
+    'm1',
+    'c',
+    '',
+    'b',
+    'q'
+  ].join('\n') + '\n';
+  const bookmarkCopyResult = runApp(bookmarkCopyInput, home, [], {
+    PATH: fakeBin + path.delimiter + process.env.PATH,
+    REPOTEER_SMOKE_CLIPBOARD_FILE: clipboardFile
+  });
+
+  assert(bookmarkCopyResult.status === 0, bookmarkCopyResult.stderr || 'project bookmark copy path failed');
+  assert(bookmarkCopyResult.stdout.includes('Link copied: Dashboard'), 'bookmark detail path did not copy target');
+  assert(fs.readFileSync(clipboardFile, 'utf8') === 'https://example.com/dashboard', 'bookmark detail copied text mismatch');
+
   const detailInput = [
     '1',
     'm1',
@@ -1622,6 +1639,8 @@ function smokeProjectItemsPath() {
     'vp1',
     'b',
     'c1',
+    'c',
+    '',
     'b',
     'm1',
     'd',
@@ -1638,7 +1657,10 @@ function smokeProjectItemsPath() {
     'b',
     'q'
   ].join('\n') + '\n';
-  const detailResult = runApp(detailInput, home);
+  const detailResult = runApp(detailInput, home, [], {
+    PATH: fakeBin + path.delimiter + process.env.PATH,
+    REPOTEER_SMOKE_CLIPBOARD_FILE: clipboardFile
+  });
 
   assert(detailResult.status === 0, detailResult.stderr || 'project items detail path failed');
   assert(detailResult.stdout.includes('Bookmark: Dashboard'), 'bookmark detail path did not render title');
@@ -1647,12 +1669,14 @@ function smokeProjectItemsPath() {
   assert(detailResult.stdout.includes('Command: echo ok'), 'command detail path did not render command');
   assert(detailResult.stdout.includes('Working directory: ' + projectPath), 'command detail path did not render working directory');
   assert(detailResult.stdout.includes('T. Open in terminal'), 'command detail path did not render open in terminal action');
+  assert(detailResult.stdout.includes('Command copied: project cli'), 'command detail path did not copy command');
   assert(detailResult.stdout.includes('Clipboard: Release notes'), 'clipboard detail path did not render title');
   assert(detailResult.stdout.includes('First clipboard line'), 'clipboard detail path did not render text');
   assert(detailResult.stdout.includes('C. Copy'), 'clipboard detail path did not render copy action');
   assert(detailResult.stdout.includes('Bookmark deleted.'), 'bookmark detail path did not delete bookmark');
   assert(detailResult.stdout.includes('Command deleted.'), 'command detail path did not delete command');
   assert(detailResult.stdout.includes('Clipboard item deleted.'), 'clipboard detail path did not delete clipboard item');
+  assert(fs.readFileSync(clipboardFile, 'utf8') === 'echo ok', 'command detail copied text mismatch');
   assert(readBookmarks(home).length === 0, 'project items should delete bookmark');
   assert(readCommands(home).length === 0, 'project items should delete command');
   assert(readClipboardItems(home).length === 0, 'project items should delete clipboard item');

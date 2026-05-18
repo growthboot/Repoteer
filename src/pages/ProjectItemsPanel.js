@@ -275,6 +275,7 @@ export class ProjectItemsPanel {
     console.log('');
     formatActionColumns([
       this.color.bold('O.') + ' Open',
+      this.color.bold('C.') + ' Copy',
       this.color.bold('E.') + ' Edit',
       this.color.bold('D.') + ' Delete',
       ...this.globalActionItems()
@@ -293,6 +294,13 @@ export class ProjectItemsPanel {
     if (key === 'o') {
       this.openTarget(bookmark.target);
       console.log('');
+      await promptLine('Press Enter to continue.');
+      await this.showBookmark(project, index);
+      return;
+    }
+
+    if (key === 'c') {
+      await this.copyBookmarkTarget(bookmark);
       await promptLine('Press Enter to continue.');
       await this.showBookmark(project, index);
       return;
@@ -342,6 +350,7 @@ export class ProjectItemsPanel {
     formatActionColumns([
       this.color.bold('X.') + ' Run',
       this.color.bold('T.') + ' Open in terminal',
+      this.color.bold('C.') + ' Copy',
       this.color.bold('E.') + ' Edit',
       this.color.bold('D.') + ' Delete',
       ...this.globalActionItems()
@@ -371,6 +380,13 @@ export class ProjectItemsPanel {
       return;
     }
 
+    if (key === 'c') {
+      await this.copyCommand(command);
+      await promptLine('Press Enter to continue.');
+      await this.showCommand(project, index);
+      return;
+    }
+
     if (key === 'e') {
       await this.editCommand(project, index, command);
       return;
@@ -382,6 +398,30 @@ export class ProjectItemsPanel {
     }
 
     await this.showProject(project.name);
+  }
+
+  async copyBookmarkTarget(bookmark) {
+    const copied = this.runtime.clipboard.copy(bookmark.target);
+
+    console.log('');
+
+    if (!copied.ok) {
+      console.log(this.color.yellow(copied.warning || 'Clipboard copy failed.'));
+    } else {
+      console.log(this.color.green('Link copied: ' + bookmark.title));
+    }
+  }
+
+  async copyCommand(command) {
+    const copied = this.runtime.clipboard.copy(command.command);
+
+    console.log('');
+
+    if (!copied.ok) {
+      console.log(this.color.yellow(copied.warning || 'Clipboard copy failed.'));
+    } else {
+      console.log(this.color.green('Command copied: ' + command.title));
+    }
   }
 
   async copyClipboardItem(project, index, pause = true) {
