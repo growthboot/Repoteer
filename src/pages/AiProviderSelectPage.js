@@ -310,10 +310,9 @@ export class AiProviderSelectPage {
       title: parsed.title,
       body: parsed.body,
       pushAfterCommit: true,
-      returnPage: 'repo',
+      returnPage: 'project',
       returnParams: {
-        projectName: params.projectName,
-        repoPath: params.repoPath
+        projectName: params.projectName
       }
     });
 

@@ -238,6 +238,11 @@ export class RepoPage {
       console.log(color.yellow(pushed.warning));
     } else {
       console.log(color.green('Push complete.'));
+
+      if (pushed.warning) {
+        console.log(color.yellow(pushed.warning));
+      }
+
       this.runtime.refreshSnapshot();
     }
 
@@ -251,7 +256,11 @@ export class RepoPage {
       repoPath: repo.path,
       title: payload.title,
       body: payload.body,
-      pushAfterCommit
+      pushAfterCommit,
+      returnPage: 'project',
+      returnParams: {
+        projectName: project.name
+      }
     });
   }
 

@@ -103,6 +103,10 @@ export class CommitConfirmPage {
         console.log(color.yellow(pushed.warning));
       } else {
         console.log(color.green('Push complete.'));
+
+        if (pushed.warning) {
+          console.log(color.yellow(pushed.warning));
+        }
       }
     }
 

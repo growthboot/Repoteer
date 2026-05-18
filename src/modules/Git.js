@@ -281,9 +281,25 @@ export class Git {
   push(repoPath) {
     const result = this.run(['-C', repoPath, 'push']);
 
+    if (result.ok) {
+      return {
+        ok: true,
+        warning: null
+      };
+    }
+
+    const upstreamStatus = this.getUpstreamStatus(repoPath);
+
+    if (upstreamStatus.ok && upstreamStatus.upstream && upstreamStatus.ahead === 0 && upstreamStatus.behind === 0) {
+      return {
+        ok: true,
+        warning: 'Git push reported an error, but upstream is now up to date.'
+      };
+    }
+
     return {
-      ok: result.ok,
-      warning: result.ok ? null : result.stderr || 'Git push failed.'
+      ok: false,
+      warning: result.stderr || 'Git push failed.'
     };
   }
 

@@ -779,12 +779,9 @@ export class ProjectItemsPanel {
   }
 
   async returnAfterCommandRun(project, command) {
-    const repo = this.findCommandRepo(project, command);
-
-    if (repo && this.router) {
-      await this.router.replace('repo', {
-        projectName: project.name,
-        repoPath: repo.path
+    if (this.router) {
+      await this.router.backTo('project', {
+        projectName: project.name
       });
       return;
     }

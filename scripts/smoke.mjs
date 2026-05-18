@@ -1687,6 +1687,9 @@ async function smokeProjectCommandRunTerminalModePath() {
       routed.push(['project', projectName]);
     },
     router: {
+      async backTo(pageName, params) {
+        routed.push([pageName, params.projectName]);
+      },
       async replace(pageName, params) {
         routed.push([pageName, params.projectName, params.repoPath]);
       }
@@ -1723,8 +1726,8 @@ async function smokeProjectCommandRunTerminalModePath() {
   });
 
   assert(
-    routed.some((entry) => entry[0] === 'repo' && entry[1] === 'Smoke Project' && entry[2] === path.join(root, 'nested')),
-    'command run should return to the matching repo after review'
+    routed.filter((entry) => entry[0] === 'project' && entry[1] === 'Smoke Project').length === 2,
+    'command run should return to the project page after review'
   );
   assert(
     routed.some((entry) => entry[0] === 'project' && entry[1] === 'Smoke Project'),
@@ -1859,6 +1862,16 @@ function smokeDiffPagesUseNormalScroll() {
   assert(ProjectsHistoryPage.scrollMode === 'normal', 'projects history page should use normal terminal scrollback');
 }
 
+function smokeDiffPagesDoNotTruncateVisibleDiffs() {
+  const diffPageSource = fs.readFileSync(path.join(root, 'src/pages/DiffPage.js'), 'utf8');
+  const filePageSource = fs.readFileSync(path.join(root, 'src/pages/FilePage.js'), 'utf8');
+
+  assert(!diffPageSource.includes('[truncated]'), 'full diff page should not append visible truncation markers');
+  assert(!filePageSource.includes('[truncated]'), 'file diff page should not append visible truncation markers');
+  assert(!diffPageSource.includes('MAX_VISIBLE_DIFF_CHARS'), 'full diff page should not cap visible diff characters');
+  assert(!filePageSource.includes('MAX_VISIBLE_DIFF_CHARS'), 'file diff page should not cap visible diff characters');
+}
+
 async function smokeRouterTerminalModePath() {
   const events = [];
   const runtime = {
@@ -1937,13 +1950,13 @@ function smokeCommitConfirmReturnPagePath() {
         };
       }
     };
-    class RepoPage {
+    class ProjectPage {
       constructor({ params }) {
         this.params = params;
       }
 
       async show() {
-        console.log('Repo Page Returned ' + this.params.projectName + ' ' + this.params.repoPath);
+        console.log('Project Page Returned ' + this.params.projectName);
       }
     }
     class PickerPage {
@@ -1952,26 +1965,24 @@ function smokeCommitConfirmReturnPagePath() {
       }
     }
     const router = new Router(runtime, {
-      repo: RepoPage,
+      project: ProjectPage,
       picker: PickerPage,
       commitConfirm: CommitConfirmPage
     });
 
-    await router.open('repo', {
-      projectName: 'Return Project',
-      repoPath: repo.path
+    await router.open('project', {
+      projectName: 'Return Project'
     });
     await router.open('picker');
     await router.open('commitConfirm', {
       projectName: 'Return Project',
       repoPath: repo.path,
       title: 'update return path',
-      body: 'Return to repo after commit.',
+      body: 'Return to project after commit.',
       pushAfterCommit: false,
-      returnPage: 'repo',
+      returnPage: 'project',
       returnParams: {
-        projectName: 'Return Project',
-        repoPath: repo.path
+        projectName: 'Return Project'
       }
     });
 
@@ -1984,10 +1995,10 @@ function smokeCommitConfirmReturnPagePath() {
   });
 
   assert(result.status === 0, result.stderr || 'commit confirmation return page path failed');
-  assert(result.stdout.includes('COMMIT_CALLED /tmp/return-repo update return path Return to repo after commit.'), 'commit confirmation should call commit before returning');
+  assert(result.stdout.includes('COMMIT_CALLED /tmp/return-repo update return path Return to project after commit.'), 'commit confirmation should call commit before returning');
   assert(result.stdout.includes('Commit created.'), 'commit confirmation should report successful commit');
-  assert(result.stdout.includes('Repo Page Returned Return Project /tmp/return-repo'), 'commit confirmation should return to repo page');
-  assert(result.stdout.includes('CURRENT_PAGE repo'), 'commit confirmation should leave router on repo page');
+  assert(result.stdout.includes('Project Page Returned Return Project'), 'commit confirmation should return to project page');
+  assert(result.stdout.includes('CURRENT_PAGE project'), 'commit confirmation should leave router on project page');
 }
 
 function smokeCommitConfirmAutoPushPath() {
@@ -2032,24 +2043,24 @@ function smokeCommitConfirmAutoPushPath() {
         };
       }
     };
-    class RepoPage {
+    class ProjectPage {
       async show() {
-        console.log('Repo Page Returned');
+        console.log('Project Page Returned');
       }
     }
     const router = new Router(runtime, {
-      repo: RepoPage,
+      project: ProjectPage,
       commitConfirm: CommitConfirmPage
     });
 
-    await router.open('repo');
+    await router.open('project');
     await router.open('commitConfirm', {
       projectName: 'Push Project',
       repoPath: repo.path,
       title: 'push after commit',
       body: 'Push automatically after commit.',
       pushAfterCommit: true,
-      returnPage: 'repo'
+      returnPage: 'project'
     });
   `;
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
@@ -2685,6 +2696,7 @@ await smokeProjectCommandRunTerminalModePath();
 smokeScannerMissingProjectPath();
 smokeDiffFormatting();
 smokeDiffPagesUseNormalScroll();
+smokeDiffPagesDoNotTruncateVisibleDiffs();
 smokeDuplicateValidation();
 smokeTableFormatting();
 smokeBranchFormatting();

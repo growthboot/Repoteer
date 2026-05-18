@@ -2,8 +2,6 @@ import { promptAction, promptLine } from '../utils/input.js';
 import { formatDiffForDisplay } from '../utils/diff.js';
 import { formatActionColumns } from '../utils/menu.js';
 
-const MAX_VISIBLE_DIFF_CHARS = 12000;
-
 export class DiffPage {
   static scrollMode = 'normal';
 
@@ -34,11 +32,7 @@ export class DiffPage {
     } else if (!result.diff) {
       console.log(color.dim('No diff.'));
     } else {
-      const visible = result.diff.length > MAX_VISIBLE_DIFF_CHARS
-        ? result.diff.slice(0, MAX_VISIBLE_DIFF_CHARS) + '\n\n[truncated]'
-        : result.diff;
-
-      console.log(formatDiffForDisplay(visible, color));
+      console.log(formatDiffForDisplay(result.diff, color));
     }
 
     console.log('');
