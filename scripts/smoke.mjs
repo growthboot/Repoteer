@@ -144,6 +144,43 @@ function runApp(input, home, args = [], env = {}) {
   });
 }
 
+function installFakeFolderOpeners(fakeBin) {
+  fs.mkdirSync(fakeBin, { recursive: true });
+
+  for (const command of ['open', 'osascript', 'xdg-open', 'x-terminal-emulator', 'repoteer-fake-terminal']) {
+    fs.writeFileSync(path.join(fakeBin, command), '#!/bin/sh\nprintf "%s %s\\n" "$(basename "$0")" "$*" >> "$REPOTEER_SMOKE_OPEN_LOG"\n');
+    fs.chmodSync(path.join(fakeBin, command), 0o755);
+  }
+}
+
+function platformFileExplorerName() {
+  return process.platform === 'darwin' ? 'Finder' : 'file explorer';
+}
+
+function platformFileExplorerCommandName() {
+  if (process.platform === 'darwin') {
+    return 'open';
+  }
+
+  if (process.platform === 'win32') {
+    return 'cmd';
+  }
+
+  return 'xdg-open';
+}
+
+function platformTerminalCommandName() {
+  if (process.platform === 'darwin') {
+    return 'osascript';
+  }
+
+  if (process.platform === 'win32') {
+    return 'cmd.exe';
+  }
+
+  return 'repoteer-fake-terminal';
+}
+
 function readProjects(home) {
   const file = path.join(home, '.repoteer', 'storage', 'projects.json');
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -1481,6 +1518,37 @@ function smokeProjectPageCopyProjectPathPath() {
   assert(page.formatProjectPathLine({ path: projectPath }) === 'Project: ' + projectPath, 'project path copy line mismatch');
 }
 
+function smokeProjectPageOpenFolderActionsPath() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-open-project-'));
+  const storageDir = path.join(home, '.repoteer', 'storage');
+  const fakeBin = path.join(home, 'fake-bin');
+  const openLog = path.join(home, 'open-log.txt');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Open Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+  installFakeFolderOpeners(fakeBin);
+
+  const result = runApp(['1', 'l', '', 'o', '', 'b', 'q'].join('\n') + '\n', home, [], {
+    PATH: fakeBin + path.delimiter + process.env.PATH,
+    REPOTEER_SMOKE_OPEN_LOG: openLog,
+    TERMINAL: 'repoteer-fake-terminal'
+  });
+
+  assert(result.status === 0, result.stderr || 'project page open folder actions failed');
+  assert(result.stdout.includes('L. Open project in terminal'), 'project page did not render terminal action');
+  assert(result.stdout.includes('O. Open project in ' + platformFileExplorerName()), 'project page did not render file explorer action');
+  assert(result.stdout.includes('Project opened in terminal.'), 'project page did not confirm terminal action');
+  assert(result.stdout.includes('Project opened in ' + platformFileExplorerName() + '.'), 'project page did not confirm file explorer action');
+
+  const log = fs.readFileSync(openLog, 'utf8');
+  assert(log.includes(projectPath), 'project folder actions should pass the project path to the opener');
+  assert(log.includes(platformTerminalCommandName()), 'project terminal action should use the platform terminal opener');
+  assert(log.includes(platformFileExplorerCommandName()), 'project file explorer action should use the platform file explorer opener');
+}
+
 
 function smokeProjectPageEditProjectPath() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
@@ -2129,8 +2197,49 @@ function smokeRepoPageOpenAndDiffPath() {
   assert(result.stdout.includes('V. View full diff'), 'repo page should render view diff action');
   assert(result.stdout.includes('X. Commit summary exclusions'), 'repo page should render commit summary exclusions action');
   assert(result.stdout.includes('F. Hotfix commit & push'), 'repo page should render hotfix action');
+  assert(result.stdout.includes('T. Open repo in terminal'), 'repo page should render terminal action');
+  assert(result.stdout.includes('O. Open repo in ' + platformFileExplorerName()), 'repo page should render file explorer action');
   assert(result.stdout.includes('Repo: frontend (diff)'), 'diff page should render title');
   assert(result.stdout.includes('+const next = 2;'), 'diff page should render changed line');
+}
+
+function smokeRepoPageOpenFolderActionsPath() {
+  if (!gitAvailable()) {
+    console.log('smoke repo open folder actions skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-open-repo-project-'));
+  const repoPath = path.join(projectPath, 'frontend');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+  const fakeBin = path.join(home, 'fake-bin');
+  const openLog = path.join(home, 'open-log.txt');
+
+  initGitRepo(repoPath);
+  fs.writeFileSync(path.join(repoPath, 'test.js'), 'const value = 1;\n');
+  commitAll(repoPath, 'seed repo open folder');
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Repo Open Project', path: projectPath, shortcut: null }
+  ], null, 2) + '\n');
+  installFakeFolderOpeners(fakeBin);
+
+  const result = runApp(['1', '1', 't', '', 'o', '', 'b', 'b', 'q'].join('\n') + '\n', home, [], {
+    PATH: fakeBin + path.delimiter + process.env.PATH,
+    REPOTEER_SMOKE_OPEN_LOG: openLog,
+    TERMINAL: 'repoteer-fake-terminal'
+  });
+
+  assert(result.status === 0, result.stderr || 'repo page open folder actions failed');
+  assert(result.stdout.includes('Repo opened in terminal.'), 'repo page did not confirm terminal action');
+  assert(result.stdout.includes('Repo opened in ' + platformFileExplorerName() + '.'), 'repo page did not confirm file explorer action');
+
+  const log = fs.readFileSync(openLog, 'utf8');
+  assert(log.includes(repoPath), 'repo folder actions should pass the repo path to the opener');
+  assert(log.includes(platformTerminalCommandName()), 'repo terminal action should use the platform terminal opener');
+  assert(log.includes(platformFileExplorerCommandName()), 'repo file explorer action should use the platform file explorer opener');
 }
 
 function smokeRepoPageUnpushedPushPath() {
@@ -2706,6 +2815,7 @@ smokeProjectsPageRefreshPath();
 smokeAddProjectPath();
 smokeAddProjectCancelPath();
 smokeProjectPageCopyProjectPathPath();
+smokeProjectPageOpenFolderActionsPath();
 smokeGitRepoDiscovery();
 smokeProjectsPageHideCleanTogglePath();
 smokeProjectsPageSortsByChangeVolumePath();
@@ -2728,6 +2838,7 @@ await smokeRouterTerminalModePath();
 smokeCommitConfirmReturnPagePath();
 smokeCommitConfirmAutoPushPath();
 smokeRepoPageOpenAndDiffPath();
+smokeRepoPageOpenFolderActionsPath();
 smokeRepoPageUnpushedPushPath();
 smokeRepoHistoryPath();
 smokeProjectHistoryPath();

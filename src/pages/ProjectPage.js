@@ -70,6 +70,8 @@ export class ProjectPage {
       color.bold('D.') + ' Delete project',
       color.bold('N.') + ' Rename project',
       color.bold('C.') + ' Copy Project Path',
+      color.bold('L.') + ' Open project in terminal',
+      color.bold('O.') + ' Open project in ' + this.formatFileExplorerName(),
       color.bold('Y.') + ' History',
       ...this.router.globalActionItems(color)
     ], { color }).forEach((row) => console.log(row));
@@ -103,6 +105,16 @@ export class ProjectPage {
 
     if (key === 'c') {
       await this.copyProjectPath(project);
+      return;
+    }
+
+    if (key === 'l') {
+      await this.openProjectTerminal(project);
+      return;
+    }
+
+    if (key === 'o') {
+      await this.openProjectFolder(project);
       return;
     }
 
@@ -281,6 +293,42 @@ export class ProjectPage {
 
   formatProjectPathLine(project) {
     return 'Project: ' + project.path;
+  }
+
+  async openProjectTerminal(project) {
+    const color = this.runtime.color;
+    const opened = this.runtime.folderOpener.openTerminal(project.path);
+
+    console.log('');
+
+    if (!opened.ok) {
+      console.log(color.yellow(opened.warning || 'Open terminal failed.'));
+    } else {
+      console.log(color.green('Project opened in terminal.'));
+    }
+
+    await promptLine('Press Enter to continue.');
+    await this.router.replace('project', { projectName: project.name });
+  }
+
+  async openProjectFolder(project) {
+    const color = this.runtime.color;
+    const opened = this.runtime.folderOpener.openFolder(project.path);
+
+    console.log('');
+
+    if (!opened.ok) {
+      console.log(color.yellow(opened.warning || 'Open folder failed.'));
+    } else {
+      console.log(color.green('Project opened in ' + this.formatFileExplorerName() + '.'));
+    }
+
+    await promptLine('Press Enter to continue.');
+    await this.router.replace('project', { projectName: project.name });
+  }
+
+  formatFileExplorerName() {
+    return process.platform === 'darwin' ? 'Finder' : 'file explorer';
   }
 
   renderRepoLoadingProgress(progress, projectName) {

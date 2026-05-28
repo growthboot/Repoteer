@@ -58,6 +58,8 @@ export class RepoPage {
       color.bold('F.') + ' Hotfix commit & push',
       color.bold('P.') + ' Write a commit & push',
       ...(repo.ahead > 0 ? [color.bold('U.') + ' Push unpushed commits'] : []),
+      color.bold('T.') + ' Open repo in terminal',
+      color.bold('O.') + ' Open repo in ' + this.formatFileExplorerName(),
       color.bold('W.') + ' Switch branch',
       color.bold('Y.') + ' History',
       ...this.router.globalActionItems(color)
@@ -149,6 +151,16 @@ export class RepoPage {
       return;
     }
 
+    if (key === 't') {
+      await this.openRepoTerminal(repo);
+      return;
+    }
+
+    if (key === 'o') {
+      await this.openRepoFolder(repo);
+      return;
+    }
+
     if (key === 'u' && repo.ahead > 0) {
       await this.pushRepo(repo);
       return;
@@ -226,6 +238,42 @@ export class RepoPage {
     console.log(color.green('Full diff copied.'));
     await promptLine('Press Enter to continue.');
     await this.router.replace('repo', this.params);
+  }
+
+  async openRepoTerminal(repo) {
+    const color = this.runtime.color;
+    const opened = this.runtime.folderOpener.openTerminal(repo.path);
+
+    console.log('');
+
+    if (!opened.ok) {
+      console.log(color.yellow(opened.warning || 'Open terminal failed.'));
+    } else {
+      console.log(color.green('Repo opened in terminal.'));
+    }
+
+    await promptLine('Press Enter to continue.');
+    await this.router.replace('repo', this.params);
+  }
+
+  async openRepoFolder(repo) {
+    const color = this.runtime.color;
+    const opened = this.runtime.folderOpener.openFolder(repo.path);
+
+    console.log('');
+
+    if (!opened.ok) {
+      console.log(color.yellow(opened.warning || 'Open folder failed.'));
+    } else {
+      console.log(color.green('Repo opened in ' + this.formatFileExplorerName() + '.'));
+    }
+
+    await promptLine('Press Enter to continue.');
+    await this.router.replace('repo', this.params);
+  }
+
+  formatFileExplorerName() {
+    return process.platform === 'darwin' ? 'Finder' : 'file explorer';
   }
 
   async pushRepo(repo) {

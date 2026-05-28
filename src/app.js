@@ -32,6 +32,7 @@ import { AiPromptManager } from './modules/AiPromptManager.js';
 import { AiDiffBuilder } from './modules/AiDiffBuilder.js';
 import { AiGateway } from './modules/AiGateway.js';
 import { BrowserOpener } from './modules/BrowserOpener.js';
+import { FolderOpener } from './modules/FolderOpener.js';
 import { LocalAiClient } from './modules/LocalAiClient.js';
 import { Clipboard } from './modules/Clipboard.js';
 import { Git } from './modules/Git.js';
@@ -59,6 +60,7 @@ export async function main(argv = process.argv.slice(2)) {
   const aiDiffBuilder = new AiDiffBuilder(git);
   const clipboard = new Clipboard();
   const browserOpener = new BrowserOpener();
+  const folderOpener = new FolderOpener();
   const localAiClient = new LocalAiClient();
   const aiGateway = new AiGateway({ aiPromptManager, aiDiffBuilder, clipboard, browserOpener, localAiClient });
   const forceColorDisabled = argv.includes('--no-color');
@@ -88,6 +90,7 @@ export async function main(argv = process.argv.slice(2)) {
     aiGateway,
     clipboard,
     browserOpener,
+    folderOpener,
     localAiClient,
     scanner,
     terminal,

@@ -6,6 +6,8 @@ const TRUNCATION_MARKER = '...TRUNCATED_DIFF_DATA...';
 const DEFAULT_MAX_PROMPT_CHARACTERS = 15000;
 const RECENT_COMMIT_LOG_LIMIT = 8;
 const SAMPLE_BYTES = 262144;
+const LONG_TOKEN_MIN_LENGTH = 120;
+const LONG_TOKEN_PATTERN = /[0-9A-Za-z_:%!+/=\\-]{120,}/g;
 const MEDIA_EXTENSIONS = new Set(
   '.3gp .aif .aiff .avi .bmp .flac .gif .heic .ico .jpeg .jpg .m4a .m4v .mov .mp3 .mp4 .ogg .otf .pdf .png .psd .svg .svgz .ttf .wav .webm .webp .woff .woff2'.split(' ')
 );
@@ -354,68 +356,25 @@ export class AiDiffBuilder {
       };
     }
 
-    const promptOmittedFiles = [];
-    const diffParts = parts.filter((part) => part.kind === 'diff');
-    const keptParts = [];
-    let payloadSoFar = this.renderPayload([], {
+    const state = {
       maxPromptCharacters,
       truncated: true,
       omittedFiles,
-      promptOmittedFiles,
+      promptOmittedFiles: [],
       recentCommitLogs
-    });
+    };
+    const pretruncated = pretruncateLongTokensConservatively(parts, state, maxPromptCharacters);
 
-    for (const part of diffParts) {
-      const blockHeader = '[' + part.source + ' diff: ' + part.file + ']';
-      const blockPrefix = (keptParts.length === 0 && payloadSoFar.endsWith('No included text diff content.'))
-        ? '\n\n' + blockHeader + '\n'
-        : '\n\n' + blockHeader + '\n';
-      const remaining = maxPromptCharacters - payloadSoFar.length - blockPrefix.length;
-
-      if (remaining <= minimumTruncatedBlockLength()) {
-        promptOmittedFiles.push({
-          file: part.file,
-          reason: 'prompt-size',
-          message: '[Omitted due to prompt size: ' + part.file + ']'
-        });
-        continue;
-      }
-
-      const content = truncateDiffContent(part.content, remaining);
-      keptParts.push({
-        ...part,
-        content
-      });
-      payloadSoFar = this.renderPayload(keptParts, {
-        maxPromptCharacters,
+    if (pretruncated.payload.length <= maxPromptCharacters) {
+      return {
+        payload: pretruncated.payload,
         truncated: true,
-        omittedFiles,
-        promptOmittedFiles,
-        recentCommitLogs
-      });
-
-      if (payloadSoFar.length > maxPromptCharacters) {
-        keptParts[keptParts.length - 1] = {
-          ...part,
-          content: truncateDiffContent(part.content, Math.max(0, remaining - (payloadSoFar.length - maxPromptCharacters)))
-        };
-        payloadSoFar = this.renderPayload(keptParts, {
-          maxPromptCharacters,
-          truncated: true,
-          omittedFiles,
-          promptOmittedFiles,
-          recentCommitLogs
-        });
-      }
+        promptOmittedFiles: []
+      };
     }
 
-    let nextPayload = this.renderPayload(keptParts, {
-      maxPromptCharacters,
-      truncated: true,
-      omittedFiles,
-      promptOmittedFiles,
-      recentCommitLogs
-    });
+    const reduced = truncateDiffContentConservatively(pretruncated.parts, state, maxPromptCharacters);
+    let nextPayload = reduced.payload;
 
     if (nextPayload.length > maxPromptCharacters) {
       nextPayload = hardLimitPayload(nextPayload, maxPromptCharacters);
@@ -424,7 +383,7 @@ export class AiDiffBuilder {
     return {
       payload: nextPayload,
       truncated: true,
-      promptOmittedFiles
+      promptOmittedFiles: reduced.promptOmittedFiles
     };
   }
 
@@ -437,6 +396,201 @@ export class AiDiffBuilder {
       message: buildOmissionMessage(file, reason)
     };
   }
+}
+
+function pretruncateLongTokensConservatively(parts, state, maxPromptCharacters) {
+  let nextParts = cloneParts(parts);
+  let nextPayload = renderPayloadFromParts(nextParts, state);
+
+  while (nextPayload.length > maxPromptCharacters) {
+    const replacement = findLargestLongToken(nextParts);
+
+    if (!replacement) {
+      break;
+    }
+
+    nextParts = replaceLongToken(nextParts, replacement);
+    nextPayload = renderPayloadFromParts(nextParts, state);
+  }
+
+  return {
+    parts: nextParts,
+    payload: nextPayload
+  };
+}
+
+function truncateDiffContentConservatively(parts, state, maxPromptCharacters) {
+  const keptParts = cloneParts(parts);
+  const omittedParts = [];
+  let promptOmittedFiles = [];
+  let nextPayload = renderPayloadFromParts(keptParts, state);
+
+  while (nextPayload.length > maxPromptCharacters) {
+    const overage = nextPayload.length - maxPromptCharacters;
+    const reduced = reduceLargestDiffPart(keptParts, overage);
+
+    if (!reduced) {
+      const omitted = omitSmallestDiffPart(keptParts);
+
+      if (!omitted) {
+        break;
+      }
+
+      omittedParts.push(omitted);
+      promptOmittedFiles = buildPromptOmittedFiles(omittedParts);
+    }
+
+    nextPayload = renderPayloadFromParts(keptParts, {
+      ...state,
+      promptOmittedFiles
+    });
+  }
+
+  return {
+    payload: nextPayload,
+    promptOmittedFiles
+  };
+}
+
+function cloneParts(parts) {
+  return parts.map((part) => {
+    if (part.kind !== 'diff') {
+      return part;
+    }
+
+    return {
+      ...part,
+      content: String(part.content ?? '')
+    };
+  });
+}
+
+function findLargestLongToken(parts) {
+  let best = null;
+
+  parts.forEach((part, partIndex) => {
+    if (part.kind !== 'diff') {
+      return;
+    }
+
+    for (const match of findLongTokenMatches(part.content)) {
+      if (!best || match.length > best.length) {
+        best = {
+          ...match,
+          partIndex
+        };
+      }
+    }
+  });
+
+  return best;
+}
+
+function findLongTokenMatches(text) {
+  const matches = [];
+  let offset = 0;
+
+  for (const line of String(text ?? '').split('\n')) {
+    const diffPrefixLength = /^[ +\-]/.test(line) ? 1 : 0;
+    const body = diffPrefixLength > 0 ? line.slice(diffPrefixLength) : line;
+    LONG_TOKEN_PATTERN.lastIndex = 0;
+
+    for (const match of body.matchAll(LONG_TOKEN_PATTERN)) {
+      const token = match[0];
+
+      if (token.length < LONG_TOKEN_MIN_LENGTH) {
+        continue;
+      }
+
+      const start = offset + diffPrefixLength + match.index;
+
+      matches.push({
+        start,
+        end: start + token.length,
+        length: token.length
+      });
+    }
+
+    offset += line.length + 1;
+  }
+
+  return matches;
+}
+
+function replaceLongToken(parts, replacement) {
+  return parts.map((part, index) => {
+    if (index !== replacement.partIndex || part.kind !== 'diff') {
+      return part;
+    }
+
+    const marker = '[truncated long token: ' + String(replacement.length) + ' characters]';
+
+    return {
+      ...part,
+      content: part.content.slice(0, replacement.start) + marker + part.content.slice(replacement.end)
+    };
+  });
+}
+
+function reduceLargestDiffPart(parts, overage) {
+  let targetIndex = -1;
+  let targetReduction = 0;
+
+  parts.forEach((part, index) => {
+    if (part.kind !== 'diff') {
+      return;
+    }
+
+    const minimumLength = Math.min(part.content.length, minimumRepresentativeBlockLength());
+    const availableReduction = part.content.length - minimumLength;
+
+    if (availableReduction > targetReduction) {
+      targetIndex = index;
+      targetReduction = availableReduction;
+    }
+  });
+
+  if (targetIndex < 0 || targetReduction <= 0) {
+    return false;
+  }
+
+  const part = parts[targetIndex];
+  const minimumLength = Math.min(part.content.length, minimumRepresentativeBlockLength());
+  const nextBudget = Math.max(minimumLength, part.content.length - Math.max(1, overage));
+
+  parts[targetIndex] = {
+    ...part,
+    content: truncateDiffContent(part.content, nextBudget)
+  };
+
+  return true;
+}
+
+function omitSmallestDiffPart(parts) {
+  let targetIndex = -1;
+  let targetLength = Infinity;
+
+  parts.forEach((part, index) => {
+    if (part.kind !== 'diff') {
+      return;
+    }
+
+    if (part.content.length < targetLength) {
+      targetIndex = index;
+      targetLength = part.content.length;
+    }
+  });
+
+  if (targetIndex < 0) {
+    return null;
+  }
+
+  const [omitted] = parts.splice(targetIndex, 1);
+  return omitted;
+}
+
+function renderPayloadFromParts(parts, state) {
+  return AiDiffBuilder.prototype.renderPayload.call(null, parts, state);
 }
 
 function normalizeMaxPromptCharacters(value) {
@@ -673,6 +827,24 @@ function buildOmissionMessage(file, reason) {
   return '[Omitted non-text diff: ' + file + ']';
 }
 
+function buildPromptOmittedFiles(parts) {
+  if (parts.length === 0) {
+    return [];
+  }
+
+  const files = parts.map((part) => part.file);
+  const visibleFiles = files.slice(0, 12);
+  const suffix = files.length > visibleFiles.length
+    ? ', plus ' + String(files.length - visibleFiles.length) + ' more'
+    : '';
+
+  return [{
+    file: visibleFiles.join(', '),
+    reason: 'prompt-size',
+    message: TRUNCATION_MARKER + ' [Omitted due to prompt size: ' + visibleFiles.join(', ') + suffix + ']'
+  }];
+}
+
 function truncateDiffContent(content, budget) {
   if (content.length <= budget) {
     return content;
@@ -685,8 +857,8 @@ function truncateDiffContent(content, budget) {
   });
 }
 
-function minimumTruncatedBlockLength() {
-  return TRUNCATION_MARKER.length + 24;
+function minimumRepresentativeBlockLength() {
+  return TRUNCATION_MARKER.length + 140;
 }
 
 function truncateWithInteriorHole(text, budget, options) {
@@ -706,7 +878,8 @@ function truncateWithInteriorHole(text, budget, options) {
   const reservedHead = lines.slice(0, headEnd).join('\n');
   const reservedTail = lines.slice(tailStart).join('\n');
   const contentBudget = maxLength - options.markerBlock.length;
-  const preferredTailBudget = Math.min(reservedTail.length, Math.max(1, Math.floor(contentBudget * 0.85)));
+  const preferredHeadBudget = Math.min(reservedHead.length, Math.max(1, Math.ceil(contentBudget * 0.35)));
+  const preferredTailBudget = Math.min(reservedTail.length, Math.max(1, contentBudget - preferredHeadBudget));
   const headBudget = Math.max(0, contentBudget - preferredTailBudget);
   const head = takeStart(reservedHead, headBudget);
   const tailBudget = Math.max(0, contentBudget - head.length);
