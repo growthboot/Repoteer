@@ -16,6 +16,7 @@ import { AiGateway } from '../src/modules/AiGateway.js';
 import { AiPromptManager } from '../src/modules/AiPromptManager.js';
 import { AiDiffBuilder } from '../src/modules/AiDiffBuilder.js';
 import { CommitManager } from '../src/modules/CommitManager.js';
+import { ActivityGraph } from '../src/modules/ActivityGraph.js';
 import { PromptsStore } from '../src/storage/PromptsStore.js';
 import { SettingsStore } from '../src/storage/SettingsStore.js';
 import { DEFAULT_PROMPTS } from '../src/data/defaultPrompts.js';
@@ -115,6 +116,14 @@ function commitAllAt(repoPath, message, date, body = '') {
   });
 
   assert(result.status === 0, result.stderr || result.stdout || 'git dated commit failed: git ' + args.join(' '));
+}
+
+function localNoonDaysAgo(daysAgo) {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  date.setHours(12, 0, 0, 0);
+
+  return date.toISOString();
 }
 
 function readGitState(repoPath) {
@@ -2474,6 +2483,104 @@ function smokeProjectsHistoryPath() {
   assert(!result.stdout.includes('diff --git'), 'projects history path should not render historical patch diffs');
 }
 
+function smokeActivityGraphMainViewsPath() {
+  if (!gitAvailable()) {
+    console.log('smoke activity graph skipped: git unavailable');
+    return;
+  }
+
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-home-'));
+  const alphaPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-activity-alpha-'));
+  const betaPath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-activity-beta-'));
+  const archivePath = fs.mkdtempSync(path.join(os.tmpdir(), 'repoteer-smoke-activity-archive-'));
+  const alphaRepoPath = path.join(alphaPath, 'api');
+  const betaRepoPath = path.join(betaPath, 'web');
+  const archiveRepoPath = path.join(archivePath, 'old');
+  const storageDir = path.join(home, '.repoteer', 'storage');
+
+  initGitRepo(alphaRepoPath);
+  fs.writeFileSync(path.join(alphaRepoPath, 'seed.txt'), 'seed\n');
+  commitAllAt(alphaRepoPath, 'old alpha seed', localNoonDaysAgo(45));
+
+  initGitRepo(betaRepoPath);
+  fs.writeFileSync(path.join(betaRepoPath, 'seed.txt'), 'seed\n');
+  commitAllAt(betaRepoPath, 'old beta seed', localNoonDaysAgo(45));
+
+  initGitRepo(archiveRepoPath);
+  fs.writeFileSync(path.join(archiveRepoPath, 'seed.txt'), 'seed\n');
+  commitAllAt(archiveRepoPath, 'old archive seed', localNoonDaysAgo(45));
+
+  for (let index = 1; index <= 3; index += 1) {
+    fs.writeFileSync(path.join(alphaRepoPath, 'today-' + String(index) + '.txt'), 'today ' + String(index) + '\n');
+    commitAllAt(alphaRepoPath, 'alpha today ' + String(index), localNoonDaysAgo(0));
+  }
+
+  fs.writeFileSync(path.join(alphaRepoPath, 'yesterday.txt'), 'yesterday\n');
+  commitAllAt(alphaRepoPath, 'alpha yesterday', localNoonDaysAgo(1));
+
+  for (let index = 1; index <= 2; index += 1) {
+    fs.writeFileSync(path.join(betaRepoPath, 'two-days-' + String(index) + '.txt'), 'two days ' + String(index) + '\n');
+    commitAllAt(betaRepoPath, 'beta two days ' + String(index), localNoonDaysAgo(2));
+  }
+
+  for (let index = 1; index <= 6; index += 1) {
+    fs.writeFileSync(path.join(archiveRepoPath, 'archived-' + String(index) + '.txt'), 'archived ' + String(index) + '\n');
+    commitAllAt(archiveRepoPath, 'archived today ' + String(index), localNoonDaysAgo(0));
+  }
+
+  fs.mkdirSync(storageDir, { recursive: true });
+  fs.writeFileSync(path.join(storageDir, 'projects.json'), JSON.stringify([
+    { name: 'Alpha Activity', path: alphaPath, shortcut: null, archived: false },
+    { name: 'Beta Activity', path: betaPath, shortcut: null, archived: false },
+    { name: 'Archived Activity', path: archivePath, shortcut: null, archived: true }
+  ], null, 2) + '\n');
+
+  const result = runApp(['1', '1', 'b', 'b', 'q'].join('\n') + '\n', home, [], {
+    COLUMNS: '90'
+  });
+  const output = stripAnsi(result.stdout);
+  const graph = new ActivityGraph(new Git());
+  const alphaCounts = Array.from({ length: 90 }, () => 0);
+  const activeCounts = Array.from({ length: 90 }, () => 0);
+  alphaCounts[44] = 1;
+  alphaCounts[88] = 1;
+  alphaCounts[89] = 3;
+  activeCounts[44] = 2;
+  activeCounts[87] = 2;
+  activeCounts[88] = 1;
+  activeCounts[89] = 3;
+  const alphaGraph = graph.renderCounts(alphaCounts).join('\n');
+  const activeGraph = graph.renderCounts(activeCounts).join('\n');
+
+  assert(result.status === 0, result.stderr || 'activity graph path failed');
+
+  const projectsStart = output.indexOf('Repoteer');
+  const projectsEnd = output.indexOf('Action:', projectsStart);
+  const projectsScreen = output.slice(projectsStart, projectsEnd);
+  assert(projectsScreen.includes(activeGraph), 'projects page should render active project activity graph');
+  assert(projectsScreen.indexOf(activeGraph) < projectsScreen.indexOf('Total:'), 'projects activity graph should render before the summary');
+  assert(!projectsScreen.includes('Archived Activity'), 'projects page should exclude archived projects from visible activity scope');
+
+  const projectStart = output.indexOf('Project: Alpha Activity');
+  const projectEnd = output.indexOf('Action:', projectStart);
+  const projectScreen = output.slice(projectStart, projectEnd);
+  assert(projectScreen.includes(alphaGraph), 'project page should render selected project activity graph');
+  assert(projectScreen.indexOf(alphaGraph) < projectScreen.indexOf('Repo'), 'project activity graph should render before repo rows');
+
+  const repoStart = output.indexOf('Repo: Alpha Activity / api');
+  const repoEnd = output.indexOf('Action:', repoStart);
+  const repoScreen = output.slice(repoStart, repoEnd);
+  assert(repoScreen.includes(alphaGraph), 'repo page should render selected repo activity graph');
+  assert(repoScreen.indexOf(alphaGraph) < repoScreen.indexOf('No file changes.'), 'repo activity graph should render before file state');
+  assert(alphaGraph.includes('Activity (90d)'), 'activity graph should label the visible day range');
+  assert(alphaGraph.includes('90d ago') && alphaGraph.includes('60d ago') && alphaGraph.includes('30d ago') && alphaGraph.includes('today'), 'activity graph should render x-axis labels');
+  assert(alphaGraph.includes('┤') && alphaGraph.includes('└') && alphaGraph.includes('┴'), 'activity graph should render box-drawing axes');
+  assert(alphaGraph.split('\n')[1].endsWith('░'), 'activity graph should render the busiest recent day at full height');
+  assert(alphaGraph.split('\n')[6].endsWith('░░'), 'activity graph should give lower activity days shorter columns');
+  assert(alphaGraph.split('\n')[1].length === alphaGraph.split('\n')[7].length, 'activity graph axis should match the data width');
+  assert(alphaGraph.split('\n')[7].length === alphaGraph.split('\n')[8].length, 'activity graph labels should match the axis width');
+}
+
 
 function smokeAiToolEntryPointsPath() {
   if (!gitAvailable()) {
@@ -2843,6 +2950,7 @@ smokeRepoPageUnpushedPushPath();
 smokeRepoHistoryPath();
 smokeProjectHistoryPath();
 smokeProjectsHistoryPath();
+smokeActivityGraphMainViewsPath();
 smokeAiToolEntryPointsPath();
 smokeRepoFilePagePath();
 smokeRepoHotfixConfirmPath();

@@ -29,6 +29,7 @@ export class RepoPage {
     console.log('Branch: ' + formatBranchName(repo, color));
     this.renderPushStatus(repo, color);
     console.log('');
+    this.renderActivityGraph(repo);
 
     if (repo.warning) {
       console.log(color.yellow(repo.warning));
@@ -186,6 +187,27 @@ export class RepoPage {
     }
 
     console.log('Push: up to date with ' + repo.upstream);
+  }
+
+  renderActivityGraph(repo) {
+    const lines = this.runtime.activityGraph.renderForRepos([repo], {
+      width: this.getTerminalWidth(),
+      color: this.runtime.color
+    });
+
+    lines.forEach((line) => console.log(line));
+
+    if (lines.length > 0) {
+      console.log('');
+    }
+  }
+
+  getTerminalWidth() {
+    const stdoutWidth = Number(process.stdout.columns);
+    const envWidth = Number(process.env.COLUMNS);
+    const width = Number.isFinite(stdoutWidth) && stdoutWidth > 0 ? stdoutWidth : envWidth;
+
+    return Number.isFinite(width) && width > 0 ? width : 80;
   }
 
   renderFiles(files, color) {

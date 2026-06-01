@@ -228,6 +228,35 @@ export class Git {
     };
   }
 
+  getCommitTimestamps(repoPath, options = {}) {
+    const days = Math.max(1, Number.parseInt(String(options.days ?? 30), 10) || 30);
+    const result = this.run([
+      '-C',
+      repoPath,
+      'log',
+      '--since=' + String(days) + ' days ago',
+      '--format=%ct'
+    ]);
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        timestamps: [],
+        warning: result.stderr || 'Git activity history not available.'
+      };
+    }
+
+    return {
+      ok: true,
+      timestamps: this.parseLines(result.stdout).map((line) => {
+        const timestamp = Number(line) * 1000;
+
+        return Number.isFinite(timestamp) ? timestamp : null;
+      }).filter((timestamp) => timestamp !== null),
+      warning: null
+    };
+  }
+
   getCommitChanges(repoPath, commitHash) {
     const result = this.run([
       '-C',

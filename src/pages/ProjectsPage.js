@@ -31,6 +31,7 @@ export class ProjectsPage {
     }
     const hideCleanProjects = this.runtime.projectsPageHideClean === true;
     const orderedProjects = this.orderProjects(snapshot.projects);
+    this.renderActivityGraph(orderedProjects);
     this.renderProjectsSummary(orderedProjects);
     console.log('');
 
@@ -435,6 +436,28 @@ export class ProjectsPage {
       this.runtime.color.bold('Net: ') +
       this.formatNetValue(totals.net)
     );
+  }
+
+  renderActivityGraph(projects) {
+    const repos = projects.flatMap((project) => project.repos ?? []);
+    const lines = this.runtime.activityGraph.renderForRepos(repos, {
+      width: this.getTerminalWidth(),
+      color: this.runtime.color
+    });
+
+    lines.forEach((line) => console.log(line));
+
+    if (lines.length > 0) {
+      console.log('');
+    }
+  }
+
+  getTerminalWidth() {
+    const stdoutWidth = Number(process.stdout.columns);
+    const envWidth = Number(process.env.COLUMNS);
+    const width = Number.isFinite(stdoutWidth) && stdoutWidth > 0 ? stdoutWidth : envWidth;
+
+    return Number.isFinite(width) && width > 0 ? width : 80;
   }
 
   sumProjectTotals(projects) {

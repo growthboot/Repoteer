@@ -38,6 +38,7 @@ export class ProjectPage {
 
     console.log(color.bold('Project: ' + project.name));
     console.log('');
+    this.renderActivityGraph(project.repos);
 
     const repos = hideReposWithoutLineChanges ? project.repos.filter((repo) => {
       return this.shouldShowRepoWhenLineChangesHidden(repo);
@@ -165,6 +166,27 @@ export class ProjectPage {
     console.log(formattedRows[0]);
     console.log('');
     formattedRows.slice(1).forEach((row) => console.log(row));
+  }
+
+  renderActivityGraph(repos) {
+    const lines = this.runtime.activityGraph.renderForRepos(repos, {
+      width: this.getTerminalWidth(),
+      color: this.runtime.color
+    });
+
+    lines.forEach((line) => console.log(line));
+
+    if (lines.length > 0) {
+      console.log('');
+    }
+  }
+
+  getTerminalWidth() {
+    const stdoutWidth = Number(process.stdout.columns);
+    const envWidth = Number(process.env.COLUMNS);
+    const width = Number.isFinite(stdoutWidth) && stdoutWidth > 0 ? stdoutWidth : envWidth;
+
+    return Number.isFinite(width) && width > 0 ? width : 80;
   }
 
   async editProject(project) {

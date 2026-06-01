@@ -36,6 +36,7 @@ import { FolderOpener } from './modules/FolderOpener.js';
 import { LocalAiClient } from './modules/LocalAiClient.js';
 import { Clipboard } from './modules/Clipboard.js';
 import { Git } from './modules/Git.js';
+import { ActivityGraph } from './modules/ActivityGraph.js';
 import { Scanner } from './modules/Scanner.js';
 import { resolveRuntimePaths } from './config/paths.js';
 import { createColor } from './utils/color.js';
@@ -53,6 +54,7 @@ export async function main(argv = process.argv.slice(2)) {
   const settings = settingsStore.get();
   const projectManager = new ProjectManager(projectsStore);
   const git = new Git();
+  const activityGraph = new ActivityGraph(git);
   const scanner = new Scanner(git);
   const commitManager = new CommitManager(git);
   const branchManager = new BranchManager(git);
@@ -92,6 +94,7 @@ export async function main(argv = process.argv.slice(2)) {
     browserOpener,
     folderOpener,
     localAiClient,
+    activityGraph,
     scanner,
     terminal,
     color,
