@@ -27,39 +27,52 @@ export class FilePage {
       return;
     }
 
-    console.log(color.bold('Repo: ' + project.name + ' / ' + repo.name));
-    console.log(color.bold('File: ' + fileName));
-    console.log('');
-
-    if (repo.warning) {
-      console.log(color.yellow(repo.warning));
-      console.log('');
-    }
-
-    this.renderMetadata(repo.path, file, color);
-    console.log('');
-
     const diff = this.runtime.git.getFileDiff(repo.path, file.file);
 
-    if (!diff.ok) {
-      console.log(color.yellow(diff.warning));
-    } else if (!diff.diff) {
-      console.log(color.dim('No diff.'));
-    } else {
-      console.log(formatDiffForDisplay(diff.diff, color));
-    }
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Repo: ' + project.name + ' / ' + repo.name));
+      console.log(color.bold('File: ' + fileName));
+      console.log('');
 
-    console.log('');
-    console.log(color.bold('Actions:'));
-    console.log('');
-    formatActionColumns([
-      color.bold('C.') + ' Copy file diff',
-      color.bold('D.') + ' Discard file changes',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+      if (repo.warning) {
+        console.log(color.yellow(repo.warning));
+        console.log('');
+      }
 
-    const answer = await promptAction('Action: ');
+      this.renderMetadata(repo.path, file, color);
+      console.log('');
+
+      if (!diff.ok) {
+        console.log(color.yellow(diff.warning));
+      } else if (!diff.diff) {
+        console.log(color.dim('No diff.'));
+      } else {
+        console.log(formatDiffForDisplay(diff.diff, color));
+      }
+
+      console.log('');
+      console.log(color.bold('Actions:'));
+      console.log('');
+      formatActionColumns([
+        color.bold('C.') + ' Copy file diff',
+        color.bold('D.') + ' Discard file changes',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        { key: 'c', label: 'Copy file diff' },
+        { key: 'd', label: 'Discard file changes' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {

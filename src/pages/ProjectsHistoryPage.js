@@ -19,38 +19,53 @@ export class ProjectsHistoryPage {
     const color = this.runtime.color;
     const page = this.getPage();
 
-    console.clear();
-    console.log(color.bold('History: Projects'));
-    console.log('Page: ' + String(page + 1));
-    console.log('');
-
     const history = this.getProjectsCommitHistory(page);
 
-    history.warnings.forEach((warning) => {
-      console.log(color.yellow(warning));
-    });
-
-    if (history.warnings.length > 0 && history.commits.length > 0) {
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('History: Projects'));
+      console.log('Page: ' + String(page + 1));
       console.log('');
-    }
 
-    if (history.commits.length === 0) {
-      console.log(color.dim(page === 0 ? 'No commits found.' : 'No commits on this page.'));
-    } else {
-      this.renderCommits(history.commits, color);
-    }
+      history.warnings.forEach((warning) => {
+        console.log(color.yellow(warning));
+      });
 
-    console.log('');
-    console.log(color.bold('Actions:'));
-    console.log('');
-    formatActionColumns([
-      ...(history.hasNextPage ? [color.bold('N.') + ' Next page'] : []),
-      ...(page > 0 ? [color.bold('P.') + ' Previous page'] : []),
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+      if (history.warnings.length > 0 && history.commits.length > 0) {
+        console.log('');
+      }
 
-    const answer = await promptAction('Commit number/action: ');
+      if (history.commits.length === 0) {
+        console.log(color.dim(page === 0 ? 'No commits found.' : 'No commits on this page.'));
+      } else {
+        this.renderCommits(history.commits, color, selectedKey);
+      }
+
+      console.log('');
+      console.log(color.bold('Actions:'));
+      console.log('');
+      formatActionColumns([
+        ...(history.hasNextPage ? [color.bold('N.') + ' Next page'] : []),
+        ...(page > 0 ? [color.bold('P.') + ' Previous page'] : []),
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Commit number/action: ', {
+      choices: [
+        ...history.commits.map((commit, index) => {
+          return { key: String(index + 1), label: 'Commit: ' + (commit.title || commit.shortHash) };
+        }),
+        ...(history.hasNextPage ? [{ key: 'n', label: 'Next page' }] : []),
+        ...(page > 0 ? [{ key: 'p', label: 'Previous page' }] : []),
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {
@@ -144,7 +159,7 @@ export class ProjectsHistoryPage {
     };
   }
 
-  renderCommits(commits, color) {
+  renderCommits(commits, color, selectedKey = null) {
     const bodyWidth = this.getBodyWidth();
 
     commits.forEach((commit, index) => {
@@ -154,7 +169,8 @@ export class ProjectsHistoryPage {
       const bodyLines = this.wrapText(commit.body || '', bodyWidth);
       const date = commit.age ? commit.date + ' (' + commit.age + ')' : commit.date;
 
-      console.log(number + ' ' + date + ' ' + commit.project.name + ' / ' + commit.repo.name + ' ' + commit.shortHash + ' ' + stats);
+      const firstLine = number + ' ' + date + ' ' + commit.project.name + ' / ' + commit.repo.name + ' ' + commit.shortHash + ' ' + stats;
+      console.log(String(selectedKey || '') === String(index + 1) ? color.selected(firstLine) : firstLine);
       console.log('Title: ' + (commit.title || '(no title)'));
       console.log(BODY_LABEL + bodyLines[0]);
 

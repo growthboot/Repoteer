@@ -24,35 +24,50 @@ export class AiProviderSelectPage {
       return;
     }
 
-    console.log(color.bold('AI: ' + tool.title));
-    console.log('');
-    console.log('Repo: ' + this.formatRepoLabel());
-    console.log('Payload size: ' + this.formatPayloadSize());
-    console.log('Diff input: ' + (this.params.inputSummary || 'staged, unstaged tracked, and untracked text changes'));
-
-    if (Array.isArray(this.params.payloadWarnings) && this.params.payloadWarnings.length > 0) {
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('AI: ' + tool.title));
       console.log('');
-      this.params.payloadWarnings.forEach((warning) => console.log(color.yellow(warning)));
-    }
+      console.log('Repo: ' + this.formatRepoLabel());
+      console.log('Payload size: ' + this.formatPayloadSize());
+      console.log('Diff input: ' + (this.params.inputSummary || 'staged, unstaged tracked, and untracked text changes'));
 
-    console.log('');
-    console.log(color.bold('Choose where to send this prompt:'));
-    console.log('');
+      if (Array.isArray(this.params.payloadWarnings) && this.params.payloadWarnings.length > 0) {
+        console.log('');
+        this.params.payloadWarnings.forEach((warning) => console.log(color.yellow(warning)));
+      }
 
-    if (providers.length === 0) {
-      console.log(color.dim('No runnable AI providers configured.'));
-    } else {
-      this.renderProviders(providers);
-    }
+      console.log('');
+      console.log(color.bold('Choose where to send this prompt:'));
+      console.log('');
 
-    console.log('');
-    formatActionColumns([
-      color.bold('A.') + ' AI settings',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+      if (providers.length === 0) {
+        console.log(color.dim('No runnable AI providers configured.'));
+      } else {
+        this.renderProviders(providers, selectedKey);
+      }
 
-    const answer = await promptAction('Action: ');
+      console.log('');
+      formatActionColumns([
+        color.bold('A.') + ' AI settings',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        ...providers.map((provider, index) => {
+          return { key: String(index + 1), label: provider.title };
+        }),
+        { key: 'a', label: 'AI settings' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {
@@ -76,7 +91,7 @@ export class AiProviderSelectPage {
     await this.router.replace('aiProviderSelect', this.params);
   }
 
-  renderProviders(providers) {
+  renderProviders(providers, selectedKey = null) {
     const color = this.runtime.color;
     const rows = [
       ['', color.bold('Provider'), color.bold('action'), color.bold('priority')]
@@ -85,15 +100,25 @@ export class AiProviderSelectPage {
     providers.forEach((provider, index) => {
       const hotkey = color.hotkey ?? color.bold;
 
-      rows.push([
+      const cells = [
         hotkey(String(index + 1) + '.'),
         provider.title,
         provider.type === 'local' ? 'Ready' : 'Open URL',
         String(provider.priority)
-      ]);
+      ];
+
+      rows.push(this.highlightRow(cells, String(selectedKey || '') === String(index + 1)));
     });
 
     formatTable(rows, { leaderGap: color.dim('···') }).forEach((row) => console.log(row));
+  }
+
+  highlightRow(cells, isSelected) {
+    if (!isSelected || typeof this.runtime.color.selected !== 'function') {
+      return cells;
+    }
+
+    return cells.map((cell) => this.runtime.color.selected(cell));
   }
 
   async runProvider(provider) {
@@ -211,19 +236,31 @@ export class AiProviderSelectPage {
     const color = this.runtime.color;
 
     while (true) {
-      console.log('');
-      console.log(color.bold('Read generated commit message'));
-      console.log('');
-      console.log(color.dim('Paste the copied prompt into the AI provider, generate a response, copy it, then continue here.'));
-      console.log('');
-      formatActionColumns([
-        color.bold('1.') + ' Read clipboard',
-        color.bold('2.') + ' Paste manually',
-        ...this.router.globalActionItems(color)
-      ], { color }).forEach((row) => console.log(row));
-      console.log('');
+      const render = (selectedKey = null) => {
+        console.clear();
+        console.log(color.bold('Read generated commit message'));
+        console.log('');
+        console.log(color.dim('Paste the copied prompt into the AI provider, generate a response, copy it, then continue here.'));
+        console.log('');
+        formatActionColumns([
+          color.bold('1.') + ' Read clipboard',
+          color.bold('2.') + ' Paste manually',
+          ...this.router.globalActionItems(color)
+        ], { color, selectedKey }).forEach((row) => console.log(row));
+        console.log('');
+      };
 
-      const answer = await promptAction('Action: ');
+      render(null);
+
+      const answer = await promptAction('Action: ', {
+        choices: [
+          { key: '1', label: 'Read clipboard' },
+          { key: '2', label: 'Paste manually' },
+          ...this.router.globalActionChoices()
+        ],
+        color,
+        render
+      });
       const key = answer.trim().toLowerCase();
 
       if (key === 'b' || key === '\u001b') {

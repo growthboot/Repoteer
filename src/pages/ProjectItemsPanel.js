@@ -12,12 +12,40 @@ export class ProjectItemsPanel {
     this.router = router;
   }
 
-  render(projectName) {
+  render(projectName, selectedKey = null) {
     const bookmarks = this.runtime.bookmarksStore.listForProject(projectName);
     const commands = this.runtime.commandsStore.listForProject(projectName);
     const clipboardItems = this.runtime.clipboardItemsStore.listForProject(projectName);
 
-    this.renderProjectItems(bookmarks, commands, clipboardItems);
+    this.renderProjectItems(bookmarks, commands, clipboardItems, selectedKey);
+  }
+
+  actionChoices(projectName) {
+    const bookmarks = this.runtime.bookmarksStore.listForProject(projectName);
+    const commands = this.runtime.commandsStore.listForProject(projectName);
+    const clipboardItems = this.runtime.clipboardItemsStore.listForProject(projectName);
+    const choices = [];
+
+    bookmarks.forEach((bookmark, index) => {
+      choices.push({ key: 'm' + String(index + 1), label: 'Bookmark: ' + bookmark.title });
+    });
+
+    choices.push({ key: 'am', label: 'Add bookmark' });
+
+    commands.forEach((command, index) => {
+      choices.push({ key: 'c' + String(index + 1), label: 'Command: ' + command.title });
+    });
+
+    choices.push({ key: 'ac', label: 'Add command' });
+
+    clipboardItems.forEach((item, index) => {
+      choices.push({ key: 'p' + String(index + 1), label: 'Copy clipboard: ' + item.title });
+      choices.push({ key: 'vp' + String(index + 1), label: 'View clipboard: ' + item.title });
+    });
+
+    choices.push({ key: 'ap', label: 'Add clipboard' });
+
+    return choices;
   }
 
   async handleAction(project, key) {
@@ -68,7 +96,7 @@ export class ProjectItemsPanel {
     return false;
   }
 
-  renderProjectItems(bookmarks, commands, clipboardItems) {
+  renderProjectItems(bookmarks, commands, clipboardItems, selectedKey = null) {
     const rows = [[this.color.bold('Bookmarks'), this.color.bold('Commands'), this.color.bold('Clipboard')]];
     const rowCount = Math.max(bookmarks.length + 1, commands.length + 1, clipboardItems.length + 1);
 
@@ -87,10 +115,37 @@ export class ProjectItemsPanel {
         ? hotkey('p' + String(index + 1) + '.') + ' ' + clipboardItem.title
         : index === clipboardItems.length ? hotkey('ap.') + ' Add clipboard' : '';
 
-      rows.push([bookmarkCell, commandCell, clipboardCell]);
+      rows.push([
+        this.highlightCell(bookmarkCell, this.isSelectedProjectItem(selectedKey, 'm', index, bookmark, bookmarks)),
+        this.highlightCell(commandCell, this.isSelectedProjectItem(selectedKey, 'c', index, command, commands)),
+        this.highlightCell(clipboardCell, this.isSelectedProjectItem(selectedKey, 'p', index, clipboardItem, clipboardItems))
+      ]);
     }
 
     formatTable(rows).forEach((row) => console.log(row));
+  }
+
+  isSelectedProjectItem(selectedKey, prefix, index, item, items) {
+    const selected = String(selectedKey || '').toLowerCase();
+
+    if (item) {
+      const itemKey = prefix + String(index + 1);
+      return selected === itemKey || selected === 'v' + itemKey;
+    }
+
+    if (index !== items.length) {
+      return false;
+    }
+
+    return selected === 'a' + prefix;
+  }
+
+  highlightCell(cell, isSelected) {
+    if (!cell || !isSelected || typeof this.color.selected !== 'function') {
+      return cell;
+    }
+
+    return this.color.selected(cell);
   }
 
   async addBookmark(project) {
@@ -264,25 +319,40 @@ export class ProjectItemsPanel {
       return;
     }
 
-    console.log(this.color.bold('Bookmark: ' + bookmark.title));
-    console.log('');
-    console.log('URL/path: ' + bookmark.target);
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(this.color.bold('Bookmark: ' + bookmark.title));
+      console.log('');
+      console.log('URL/path: ' + bookmark.target);
 
-    if (bookmark.notes) {
-      console.log('Notes: ' + bookmark.notes);
-    }
+      if (bookmark.notes) {
+        console.log('Notes: ' + bookmark.notes);
+      }
 
-    console.log('');
-    formatActionColumns([
-      this.color.bold('O.') + ' Open',
-      this.color.bold('C.') + ' Copy',
-      this.color.bold('E.') + ' Edit',
-      this.color.bold('D.') + ' Delete',
-      ...this.globalActionItems()
-    ], { color: this.color }).forEach((row) => console.log(row));
-    console.log('');
+      console.log('');
+      formatActionColumns([
+        this.color.bold('O.') + ' Open',
+        this.color.bold('C.') + ' Copy',
+        this.color.bold('E.') + ' Edit',
+        this.color.bold('D.') + ' Delete',
+        ...this.globalActionItems()
+      ], { color: this.color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
 
-    const answer = await promptAction('Action: ');
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        { key: 'o', label: 'Open' },
+        { key: 'c', label: 'Copy' },
+        { key: 'e', label: 'Edit' },
+        { key: 'd', label: 'Delete' },
+        ...this.globalActionChoices()
+      ],
+      color: this.color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.handleGlobalAction(key, project, async () => {
@@ -332,32 +402,48 @@ export class ProjectItemsPanel {
       return;
     }
 
-    console.log(this.color.bold('Command: ' + command.title));
-    console.log('');
-    console.log('Command: ' + command.command);
-    console.log('Working directory: ' + command.workingDirectory);
-
-    if (command.notes) {
-      console.log('Notes: ' + command.notes);
-    }
-
-    if (notice) {
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(this.color.bold('Command: ' + command.title));
       console.log('');
-      console.log(notice);
-    }
+      console.log('Command: ' + command.command);
+      console.log('Working directory: ' + command.workingDirectory);
 
-    console.log('');
-    formatActionColumns([
-      this.color.bold('X.') + ' Run',
-      this.color.bold('T.') + ' Open in terminal',
-      this.color.bold('C.') + ' Copy',
-      this.color.bold('E.') + ' Edit',
-      this.color.bold('D.') + ' Delete',
-      ...this.globalActionItems()
-    ], { color: this.color }).forEach((row) => console.log(row));
-    console.log('');
+      if (command.notes) {
+        console.log('Notes: ' + command.notes);
+      }
 
-    const answer = await promptAction('Action: ');
+      if (notice) {
+        console.log('');
+        console.log(notice);
+      }
+
+      console.log('');
+      formatActionColumns([
+        this.color.bold('X.') + ' Run',
+        this.color.bold('T.') + ' Open in terminal',
+        this.color.bold('C.') + ' Copy',
+        this.color.bold('E.') + ' Edit',
+        this.color.bold('D.') + ' Delete',
+        ...this.globalActionItems()
+      ], { color: this.color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        { key: 'x', label: 'Run' },
+        { key: 't', label: 'Open in terminal' },
+        { key: 'c', label: 'Copy' },
+        { key: 'e', label: 'Edit' },
+        { key: 'd', label: 'Delete' },
+        ...this.globalActionChoices()
+      ],
+      color: this.color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.handleGlobalAction(key, project, async () => {
@@ -367,8 +453,8 @@ export class ProjectItemsPanel {
     }
 
     if (key === 'x') {
-      await this.runCommand(command);
-      await this.returnAfterCommandRun(project, command);
+      const notice = await this.runCommand(command);
+      await this.returnAfterCommandRun(project, index, notice);
       return;
     }
 
@@ -464,26 +550,40 @@ export class ProjectItemsPanel {
       return;
     }
 
-    console.log(this.color.bold('Clipboard: ' + item.title));
-    console.log('');
-    console.log('Text:');
-    console.log(item.text);
-
-    if (item.notes) {
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(this.color.bold('Clipboard: ' + item.title));
       console.log('');
-      console.log('Notes: ' + item.notes);
-    }
+      console.log('Text:');
+      console.log(item.text);
 
-    console.log('');
-    formatActionColumns([
-      this.color.bold('C.') + ' Copy',
-      this.color.bold('E.') + ' Edit',
-      this.color.bold('D.') + ' Delete',
-      ...this.globalActionItems()
-    ], { color: this.color }).forEach((row) => console.log(row));
-    console.log('');
+      if (item.notes) {
+        console.log('');
+        console.log('Notes: ' + item.notes);
+      }
 
-    const answer = await promptAction('Action: ');
+      console.log('');
+      formatActionColumns([
+        this.color.bold('C.') + ' Copy',
+        this.color.bold('E.') + ' Edit',
+        this.color.bold('D.') + ' Delete',
+        ...this.globalActionItems()
+      ], { color: this.color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        { key: 'c', label: 'Copy' },
+        { key: 'e', label: 'Edit' },
+        { key: 'd', label: 'Delete' },
+        ...this.globalActionChoices()
+      ],
+      color: this.color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.handleGlobalAction(key, project, async () => {
@@ -818,15 +918,8 @@ export class ProjectItemsPanel {
     });
   }
 
-  async returnAfterCommandRun(project, command) {
-    if (this.router) {
-      await this.router.backTo('project', {
-        projectName: project.name
-      });
-      return;
-    }
-
-    await this.showProject(project.name);
+  async returnAfterCommandRun(project, index, notice) {
+    await this.showCommand(project, index, notice);
   }
 
   findCommandRepo(project, command) {
@@ -923,6 +1016,20 @@ export class ProjectItemsPanel {
       this.color.bold('S.') + ' Settings',
       this.color.bold('Q.') + ' Quit',
       this.color.bold('B.') + ' Back'
+    ];
+  }
+
+  globalActionChoices() {
+    if (this.router) {
+      return this.router.globalActionChoices();
+    }
+
+    return [
+      { key: 'h', label: 'Home' },
+      { key: 'r', label: 'Refresh' },
+      { key: 's', label: 'Settings' },
+      { key: 'q', label: 'Quit' },
+      { key: 'b', label: 'Back' }
     ];
   }
 

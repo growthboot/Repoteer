@@ -22,23 +22,37 @@ export class AiPromptEditPage {
       return;
     }
 
-    console.log(color.bold('AI Prompt: ' + prompt.tool.title));
-    console.log('');
-    console.log(color.bold('System prompt'));
-    console.log(prompt.systemPrompt);
-    console.log('');
-    console.log(color.bold('Pre-prompt'));
-    console.log(prompt.prePrompt);
-    console.log('');
-    formatActionColumns([
-      color.bold('Y.') + ' Edit system prompt',
-      color.bold('P.') + ' Edit pre-prompt',
-      color.bold('X.') + ' Reset prompts',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('AI Prompt: ' + prompt.tool.title));
+      console.log('');
+      console.log(color.bold('System prompt'));
+      console.log(prompt.systemPrompt);
+      console.log('');
+      console.log(color.bold('Pre-prompt'));
+      console.log(prompt.prePrompt);
+      console.log('');
+      formatActionColumns([
+        color.bold('Y.') + ' Edit system prompt',
+        color.bold('P.') + ' Edit pre-prompt',
+        color.bold('X.') + ' Reset prompts',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
 
-    const answer = await promptAction('Action: ');
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        { key: 'y', label: 'Edit system prompt' },
+        { key: 'p', label: 'Edit pre-prompt' },
+        { key: 'x', label: 'Reset prompts' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {

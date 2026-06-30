@@ -23,24 +23,45 @@ export class AiProviderEditPage {
       return;
     }
 
-    console.log(color.bold('Edit AI Provider: ' + provider.title));
-    console.log('');
-    console.log('Type: ' + this.formatType(provider.type));
+    const editableRows = this.editableRowsForProvider(provider);
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Edit AI Provider: ' + provider.title));
+      console.log('');
+      console.log('Type: ' + this.formatType(provider.type));
 
-    if (provider.type === 'local') {
-      console.log('Format: OpenAI-compatible chat completions');
-    }
+      if (provider.type === 'local') {
+        console.log('Format: OpenAI-compatible chat completions');
+      }
 
-    console.log('');
-    this.renderEditableRows(provider);
-    console.log('');
-    formatActionColumns(this.actionsForProvider(provider, color), { color }).forEach((row) => console.log(row));
-    console.log('');
+      console.log('');
+      this.renderEditableRows(provider, selectedKey);
+      console.log('');
+      formatActionColumns(this.actionsForProvider(provider, color), { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
 
-    const answer = await promptAction('Row/action: ');
+    render(null);
+
+    const answer = await promptAction('Row/action: ', {
+      choices: [
+        ...editableRows.map((row, index) => {
+          return { key: String(index + 1), label: row.label };
+        }),
+        { key: 't', label: 'Toggle enabled' },
+        { key: 'n', label: 'Change title' },
+        { key: 'u', label: 'Change ' + (provider.type === 'local' ? 'endpoint URL' : 'URL') },
+        ...(provider.type === 'local' ? [{ key: 'o', label: 'Change model' }] : []),
+        { key: 'p', label: 'Change priority' },
+        { key: 'm', label: 'Change max prompt size' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
-    const selectedRow = this.editableRowsForProvider(provider)[Number(key) - 1] ?? null;
+    const selectedRow = editableRows[Number(key) - 1] ?? null;
 
     if (selectedRow) {
       await this.runRowAction(provider, selectedRow.action);
@@ -84,7 +105,7 @@ export class AiProviderEditPage {
     await this.router.replace('aiProviderEdit', { providerId: provider.id });
   }
 
-  renderEditableRows(provider) {
+  renderEditableRows(provider, selectedKey = null) {
     const color = this.runtime.color;
     const rows = [
       ['', color.bold('Setting'), color.bold('value')]
@@ -93,14 +114,24 @@ export class AiProviderEditPage {
     this.editableRowsForProvider(provider).forEach((row, index) => {
       const hotkey = color.hotkey ?? color.bold;
 
-      rows.push([
+      const cells = [
         hotkey(String(index + 1) + '.'),
         row.label,
         row.value
-      ]);
+      ];
+
+      rows.push(this.highlightRow(cells, String(selectedKey || '') === String(index + 1)));
     });
 
     formatTable(rows, { leaderGap: color.dim('···') }).forEach((row) => console.log(row));
+  }
+
+  highlightRow(cells, isSelected) {
+    if (!isSelected || typeof this.runtime.color.selected !== 'function') {
+      return cells;
+    }
+
+    return cells.map((cell) => this.runtime.color.selected(cell));
   }
 
   editableRowsForProvider(provider) {

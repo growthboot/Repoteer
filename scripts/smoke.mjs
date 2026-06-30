@@ -1762,6 +1762,7 @@ function smokeProjectItemsPath() {
 async function smokeProjectCommandRunTerminalModePath() {
   const calls = [];
   const routed = [];
+  const shownCommands = [];
   const panel = new ProjectItemsPanel({
     runtime: {
       terminal: {
@@ -1799,6 +1800,9 @@ async function smokeProjectCommandRunTerminalModePath() {
   panel.waitForCommandReview = async () => {
     calls.push('review');
   };
+  panel.showCommand = async (project, index, notice) => {
+    shownCommands.push([project.name, index, notice]);
+  };
 
   const notice = await panel.runCommand({
     title: 'smoke command',
@@ -1815,24 +1819,24 @@ async function smokeProjectCommandRunTerminalModePath() {
       { path: path.join(root, 'nested') },
       { path: root }
     ]
-  }, {
-    workingDirectory: path.join(root, 'nested', 'app')
-  });
+  }, 2, notice);
 
   await panel.returnAfterCommandRun({
     name: 'Smoke Project',
     repos: []
-  }, {
-    workingDirectory: root
-  });
+  }, 0, 'Command exited with status 1.');
 
   assert(
-    routed.filter((entry) => entry[0] === 'project' && entry[1] === 'Smoke Project').length === 2,
-    'command run should return to the project page after review'
+    shownCommands.length === 2,
+    'command run should return to the command menu after review'
   );
   assert(
-    routed.some((entry) => entry[0] === 'project' && entry[1] === 'Smoke Project'),
-    'command run should fall back to the project when no repo matches'
+    shownCommands.some((entry) => entry[0] === 'Smoke Project' && entry[1] === 2 && entry[2] === 'Command finished.'),
+    'command run should preserve the command index and success notice'
+  );
+  assert(
+    shownCommands.some((entry) => entry[0] === 'Smoke Project' && entry[1] === 0 && entry[2] === 'Command exited with status 1.'),
+    'command run should preserve failure notices on the command menu'
   );
 }
 

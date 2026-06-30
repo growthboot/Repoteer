@@ -13,35 +13,58 @@ export class AiSettingsPage {
     const ai = this.runtime.settings.ai;
     const providers = this.sortedProviders(ai.providers);
 
-    console.clear();
-    console.log(color.bold('AI Settings'));
-    console.log('');
-    console.log('Global max prompt size: ' + String(ai.globalMaxPromptCharacters) + ' characters');
-    console.log('');
-    console.log(color.bold('Providers'));
+    const promptTools = this.runtime.aiPromptManager.listTools();
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('AI Settings'));
+      console.log('');
+      console.log('Global max prompt size: ' + String(ai.globalMaxPromptCharacters) + ' characters');
+      console.log('');
+      console.log(color.bold('Providers'));
 
-    if (providers.length === 0) {
-      console.log(color.dim('No AI providers configured.'));
-    } else {
-      this.renderProviders(providers, ai.globalMaxPromptCharacters);
-    }
+      if (providers.length === 0) {
+        console.log(color.dim('No AI providers configured.'));
+      } else {
+        this.renderProviders(providers, ai.globalMaxPromptCharacters, selectedKey);
+      }
 
-    console.log('');
-    console.log(color.bold('Prompts'));
-    this.runtime.aiPromptManager.listTools().forEach((tool) => {
-      console.log(color.bold(this.promptActionForTool(tool.id).toUpperCase() + '.') + ' ' + tool.title + ' prompt');
+      console.log('');
+      console.log(color.bold('Prompts'));
+      promptTools.forEach((tool) => {
+        const key = this.promptActionForTool(tool.id);
+        const row = color.bold(key.toUpperCase() + '.') + ' ' + tool.title + ' prompt';
+        console.log(String(selectedKey || '').toLowerCase() === key ? color.selected(row) : row);
+      });
+      console.log('');
+      formatActionColumns([
+        color.bold('G.') + ' Set global max prompt size',
+        color.bold('A.') + ' Add browser URL',
+        color.bold('L.') + ' Add local model',
+        color.bold('E.') + ' Edit provider',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        ...providers.map((provider, index) => {
+          return { key: String(index + 1), label: 'Provider: ' + provider.title };
+        }),
+        ...promptTools.map((tool) => {
+          return { key: this.promptActionForTool(tool.id), label: tool.title + ' prompt' };
+        }),
+        { key: 'g', label: 'Set global max prompt size' },
+        { key: 'a', label: 'Add browser URL' },
+        { key: 'l', label: 'Add local model' },
+        { key: 'e', label: 'Edit provider' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
     });
-    console.log('');
-    formatActionColumns([
-      color.bold('G.') + ' Set global max prompt size',
-      color.bold('A.') + ' Add browser URL',
-      color.bold('L.') + ' Add local model',
-      color.bold('E.') + ' Edit provider',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
-
-    const answer = await promptAction('Action: ');
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {
@@ -77,7 +100,7 @@ export class AiSettingsPage {
       }
     }
 
-    const selectedTool = this.runtime.aiPromptManager.listTools().find((tool) => {
+    const selectedTool = promptTools.find((tool) => {
       return this.promptActionForTool(tool.id) === key;
     }) ?? null;
 
@@ -89,7 +112,7 @@ export class AiSettingsPage {
     await this.router.replace('aiSettings');
   }
 
-  renderProviders(providers, globalMaxPromptCharacters) {
+  renderProviders(providers, globalMaxPromptCharacters, selectedKey = null) {
     const color = this.runtime.color;
     const rows = [
       ['', color.bold('Provider'), color.bold('state'), color.bold('priority'), color.bold('target'), color.bold('max')]
@@ -98,17 +121,27 @@ export class AiSettingsPage {
     providers.forEach((provider, index) => {
       const hotkey = color.hotkey ?? color.bold;
 
-      rows.push([
+      const cells = [
         hotkey(String(index + 1) + '.'),
         provider.title,
         this.formatEnabled(provider.enabled),
         String(provider.priority),
         this.formatTarget(provider),
         String(provider.maxPromptCharacters || globalMaxPromptCharacters)
-      ]);
+      ];
+
+      rows.push(this.highlightRow(cells, String(selectedKey || '') === String(index + 1)));
     });
 
     formatTable(rows, { leaderGap: color.dim('···') }).forEach((row) => console.log(row));
+  }
+
+  highlightRow(cells, isSelected) {
+    if (!isSelected || typeof this.runtime.color.selected !== 'function') {
+      return cells;
+    }
+
+    return cells.map((cell) => this.runtime.color.selected(cell));
   }
 
   async setGlobalMaxPromptCharacters() {

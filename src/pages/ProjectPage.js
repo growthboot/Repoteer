@@ -36,23 +36,9 @@ export class ProjectPage {
       return;
     }
 
-    console.log(color.bold('Project: ' + project.name));
-    console.log('');
-    this.renderActivityGraph(project.repos);
-
     const repos = hideReposWithoutLineChanges ? project.repos.filter((repo) => {
       return this.shouldShowRepoWhenLineChangesHidden(repo);
     }) : project.repos;
-
-    if (project.warning) {
-      console.log(color.yellow(project.warning));
-    } else if (project.repos.length === 0) {
-      console.log(color.dim('No Git repositories found.'));
-    } else if (repos.length === 0) {
-      console.log(color.dim('No repos with line changes.'));
-    } else {
-      this.renderRepos(repos, color);
-    }
 
     const itemsPanel = new ProjectItemsPanel({
       runtime: this.runtime,
@@ -63,22 +49,58 @@ export class ProjectPage {
       router: this.router
     });
 
-    console.log('');
-    itemsPanel.render(project.name);
-    console.log('');
-    formatActionColumns([
-      color.bold('T.') + ' ' + (hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes'),
-      color.bold('D.') + ' Delete project',
-      color.bold('N.') + ' Rename project',
-      color.bold('C.') + ' Copy Project Path',
-      color.bold('L.') + ' Open project in terminal',
-      color.bold('O.') + ' Open project in ' + this.formatFileExplorerName(),
-      color.bold('Y.') + ' History',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Project: ' + project.name));
+      console.log('');
+      this.renderActivityGraph(project.repos);
 
-    const answer = await promptAction('Action: ');
+      if (project.warning) {
+        console.log(color.yellow(project.warning));
+      } else if (project.repos.length === 0) {
+        console.log(color.dim('No Git repositories found.'));
+      } else if (repos.length === 0) {
+        console.log(color.dim('No repos with line changes.'));
+      } else {
+        this.renderRepos(repos, color, selectedKey);
+      }
+
+      console.log('');
+      itemsPanel.render(project.name, selectedKey);
+      console.log('');
+      formatActionColumns([
+        color.bold('T.') + ' ' + (hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes'),
+        color.bold('D.') + ' Delete project',
+        color.bold('N.') + ' Rename project',
+        color.bold('C.') + ' Copy Project Path',
+        color.bold('L.') + ' Open project in terminal',
+        color.bold('O.') + ' Open project in ' + this.formatFileExplorerName(),
+        color.bold('Y.') + ' History',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        ...repos.map((repo, index) => {
+          return { key: String(index + 1), label: 'Repo: ' + repo.name };
+        }),
+        ...itemsPanel.actionChoices(project.name),
+        { key: 't', label: hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes' },
+        { key: 'd', label: 'Delete project' },
+        { key: 'n', label: 'Rename project' },
+        { key: 'c', label: 'Copy Project Path' },
+        { key: 'l', label: 'Open project in terminal' },
+        { key: 'o', label: 'Open project in ' + this.formatFileExplorerName() },
+        { key: 'y', label: 'History' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {
@@ -141,7 +163,7 @@ export class ProjectPage {
     await this.router.replace('project', { projectName: project.name });
   }
 
-  renderRepos(repos, color) {
+  renderRepos(repos, color, selectedKey = null) {
     const rows = [
       ['', color.bold('Repo'), color.bold('branch'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit')]
     ];
@@ -151,7 +173,7 @@ export class ProjectPage {
       const prefix = repo.net >= 0 ? '+' : '';
       const net = prefix + String(repo.net);
 
-      rows.push([
+      const cells = [
         hotkey(String(index + 1) + '.'),
         repo.name,
         formatBranchName(repo, color),
@@ -159,13 +181,23 @@ export class ProjectPage {
         repo.net < 0 ? color.red(net) : color.green(net),
         repo.warning ? color.yellow('warning') : this.formatModifiedFiles(repo.modifiedFiles),
         repo.lastCommitAgo ?? 'N/A'
-      ]);
+      ];
+
+      rows.push(this.highlightRow(cells, String(selectedKey || '') === String(index + 1)));
     });
 
     const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
     console.log(formattedRows[0]);
     console.log('');
     formattedRows.slice(1).forEach((row) => console.log(row));
+  }
+
+  highlightRow(cells, isSelected) {
+    if (!isSelected || typeof this.runtime.color.selected !== 'function') {
+      return cells;
+    }
+
+    return cells.map((cell) => this.runtime.color.selected(cell));
   }
 
   renderActivityGraph(repos) {

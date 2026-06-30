@@ -15,26 +15,39 @@ export class SettingsPage {
     const enabledProviders = ai.providers.filter((provider) => provider.enabled).length;
     const disabledProviders = ai.providers.length - enabledProviders;
 
-    console.clear();
-    console.log(color.bold('Settings'));
-    console.log('');
-    console.log(color.bold('General'));
-    console.log('Alternate screen              ' + this.formatEnabled(alternateScreenEnabled));
-    console.log('Color                         ' + this.formatEnabled(colorEnabled));
-    console.log('');
-    console.log(color.bold('AI'));
-    console.log('Configured providers          ' + String(enabledProviders) + ' on, ' + String(disabledProviders) + ' off');
-    console.log('Global max prompt size        ' + String(ai.globalMaxPromptCharacters) + ' characters');
-    console.log('');
-    formatActionColumns([
-      color.bold('L.') + ' Toggle alternate screen',
-      color.bold('T.') + ' Toggle color',
-      color.bold('A.') + ' AI settings',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Settings'));
+      console.log('');
+      console.log(color.bold('General'));
+      console.log('Alternate screen              ' + this.formatEnabled(alternateScreenEnabled));
+      console.log('Color                         ' + this.formatEnabled(colorEnabled));
+      console.log('');
+      console.log(color.bold('AI'));
+      console.log('Configured providers          ' + String(enabledProviders) + ' on, ' + String(disabledProviders) + ' off');
+      console.log('Global max prompt size        ' + String(ai.globalMaxPromptCharacters) + ' characters');
+      console.log('');
+      formatActionColumns([
+        color.bold('L.') + ' Toggle alternate screen',
+        color.bold('T.') + ' Toggle color',
+        color.bold('A.') + ' AI settings',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
 
-    const answer = await promptAction('Action: ');
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        { key: 'l', label: 'Toggle alternate screen' },
+        { key: 't', label: 'Toggle color' },
+        { key: 'a', label: 'AI settings' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {

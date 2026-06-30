@@ -24,31 +24,40 @@ export class CommitHistoryDetailPage {
       return;
     }
 
-    console.log(color.bold('Commit: ' + project.name + ' / ' + repo.name));
-    console.log('');
-    console.log('Title: ' + (this.params.title || '(no title)'));
-    console.log('Body: ' + (this.params.body || ''));
-    console.log('');
-
     const changes = this.runtime.git.getCommitChanges(repo.path, this.params.commitHash);
 
-    if (!changes.ok) {
-      console.log(color.yellow(changes.warning));
-    } else if (changes.files.length === 0) {
-      console.log(color.dim('No changed files found.'));
-    } else {
-      this.renderFiles(changes.files, color);
-    }
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Commit: ' + project.name + ' / ' + repo.name));
+      console.log('');
+      console.log('Title: ' + (this.params.title || '(no title)'));
+      console.log('Body: ' + (this.params.body || ''));
+      console.log('');
 
-    console.log('');
-    console.log(color.bold('Actions:'));
-    console.log('');
-    formatActionColumns([
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+      if (!changes.ok) {
+        console.log(color.yellow(changes.warning));
+      } else if (changes.files.length === 0) {
+        console.log(color.dim('No changed files found.'));
+      } else {
+        this.renderFiles(changes.files, color);
+      }
 
-    const answer = await promptAction('Action: ');
+      console.log('');
+      console.log(color.bold('Actions:'));
+      console.log('');
+      formatActionColumns([
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: this.router.globalActionChoices(),
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {

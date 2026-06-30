@@ -21,6 +21,7 @@ export function createColor(options = {}) {
     graphLevel4: (value) => wrap(value, '38;2;164;136;82', '39', enabled),
     graphLevel5: (value) => wrap(value, '38;2;230;148;84', '39', enabled),
     graphLevel6: (value) => wrap(value, '1;38;2;255;178;104', '22;39', enabled),
+    selected: (value) => wrap(value, '1;38;2;255;255;255;48;2;70;70;70', '22;39;49', enabled),
     red: (value) => wrap(value, '31', '39', enabled),
     yellow: (value) => wrap(value, '33', '39', enabled),
     darkYellow: (value) => wrap(value, '33', '39', enabled)

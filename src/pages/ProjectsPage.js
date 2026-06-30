@@ -31,34 +31,60 @@ export class ProjectsPage {
     }
     const hideCleanProjects = this.runtime.projectsPageHideClean === true;
     const orderedProjects = this.orderProjects(snapshot.projects);
-    this.renderActivityGraph(orderedProjects);
-    this.renderProjectsSummary(orderedProjects);
-    console.log('');
-
     const projects = hideCleanProjects ? orderedProjects.filter((project) => {
       return this.shouldShowProjectWhenCleanHidden(project);
     }) : orderedProjects;
 
-    if (projects.length === 0) {
-      const message = snapshot.projects.length === 0 ? 'No projects added.' : 'No projects with code changes.';
-      console.log(color.dim(message));
-    } else {
-      this.renderProjectGroups(projects);
-    }
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Repoteer'));
+      console.log('');
+      this.renderActivityGraph(orderedProjects);
+      this.renderProjectsSummary(orderedProjects);
+      console.log('');
 
-    console.log('');
-    formatActionColumns([
-      'T. ' + (hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes'),
-      'A. Add project',
-      'V. View archive',
-      'Y. History',
-      '[0-9]P. Pin/unpin project',
-      '[0-9]A. Archive project',
-      ...this.router.globalActionItems(color, { back: false })
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+      if (projects.length === 0) {
+        const message = snapshot.projects.length === 0 ? 'No projects added.' : 'No projects with code changes.';
+        console.log(color.dim(message));
+      } else {
+        this.renderProjectGroups(projects, selectedKey);
+      }
 
-    const answer = await promptAction('Action: ');
+      console.log('');
+      formatActionColumns([
+        'T. ' + (hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes'),
+        'A. Add project',
+        'V. View archive',
+        'Y. History',
+        '[0-9]P. Pin/unpin project',
+        '[0-9]A. Archive project',
+        ...this.router.globalActionItems(color, { back: false })
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        ...projects.map((project, index) => {
+          return { key: String(index + 1), label: 'Project: ' + project.name };
+        }),
+        { key: 't', label: hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes' },
+        { key: 'a', label: 'Add project' },
+        { key: 'v', label: 'View archive' },
+        { key: 'y', label: 'History' },
+        ...projects.map((project, index) => {
+          return { key: String(index + 1) + 'p', label: 'Pin or unpin: ' + project.name };
+        }),
+        ...projects.map((project, index) => {
+          return { key: String(index + 1) + 'a', label: 'Archive: ' + project.name };
+        }),
+        ...this.router.globalActionChoices({ back: false })
+      ],
+      color,
+      render
+    });
 
     const key = answer.trim().toLowerCase();
 
@@ -150,44 +176,9 @@ export class ProjectsPage {
       return;
     }
 
-    console.log(color.bold('Project: ' + project.name));
-    console.log('');
-
     const repos = hideReposWithoutLineChanges ? project.repos.filter((repo) => {
       return this.shouldShowRepoWhenLineChangesHidden(repo);
     }) : project.repos;
-
-    if (project.warning) {
-      console.log(color.yellow(project.warning));
-    } else if (project.repos.length === 0) {
-      console.log(color.dim('No Git repositories found.'));
-    } else if (repos.length === 0) {
-      console.log(color.dim('No repos with line changes.'));
-    } else {
-      const rows = [
-        ['', color.bold('Repo'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit')]
-      ];
-
-      repos.forEach((repo, index) => {
-        const hotkey = color.hotkey ?? color.bold;
-        const prefix = repo.net >= 0 ? '+' : '';
-        const net = prefix + String(repo.net);
-
-        rows.push([
-          hotkey(String(index + 1) + '.'),
-          repo.name,
-          color.green('+' + String(repo.added)) + ' / ' + color.red('-' + String(repo.removed)),
-          repo.net < 0 ? color.red(net) : color.green(net),
-          repo.warning ? color.yellow('warning') : this.formatModifiedFiles(repo.modifiedFiles),
-          repo.lastCommitAgo ?? 'N/A'
-        ]);
-      });
-
-      const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
-      console.log(formattedRows[0]);
-      console.log('');
-      formattedRows.slice(1).forEach((row) => console.log(row));
-    }
 
     const itemsPanel = new ProjectItemsPanel({
       runtime: this.runtime,
@@ -198,19 +189,51 @@ export class ProjectsPage {
       router: this.router
     });
 
-    console.log('');
-    itemsPanel.render(project.name);
-    console.log('');
-    formatActionColumns([
-      color.bold('B.') + ' Back',
-      color.bold('T.') + ' ' + (hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes'),
-      color.bold('D.') + ' Delete project',
-      color.bold('N.') + ' Rename project',
-      ...this.router.globalActionItems(color, { back: false })
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Project: ' + project.name));
+      console.log('');
 
-    const answer = await promptAction('Action: ');
+      if (project.warning) {
+        console.log(color.yellow(project.warning));
+      } else if (project.repos.length === 0) {
+        console.log(color.dim('No Git repositories found.'));
+      } else if (repos.length === 0) {
+        console.log(color.dim('No repos with line changes.'));
+      } else {
+        this.renderLegacyRepoRows(repos, color, selectedKey);
+      }
+
+      console.log('');
+      itemsPanel.render(project.name, selectedKey);
+      console.log('');
+      formatActionColumns([
+        color.bold('B.') + ' Back',
+        color.bold('T.') + ' ' + (hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes'),
+        color.bold('D.') + ' Delete project',
+        color.bold('N.') + ' Rename project',
+        ...this.router.globalActionItems(color, { back: false })
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        ...repos.map((repo, index) => {
+          return { key: String(index + 1), label: 'Repo: ' + repo.name };
+        }),
+        ...itemsPanel.actionChoices(project.name),
+        { key: 'b', label: 'Back' },
+        { key: 't', label: hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes' },
+        { key: 'd', label: 'Delete project' },
+        { key: 'n', label: 'Rename project' },
+        ...this.router.globalActionChoices({ back: false })
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (key === 'b' || key === '\u001b') {
@@ -375,19 +398,19 @@ export class ProjectsPage {
     return [...pinnedProjects, ...unpinnedProjects];
   }
 
-  renderProjectGroups(projects) {
+  renderProjectGroups(projects, selectedKey = null) {
     const pinnedProjects = projects.filter((project) => project.pinned === true);
     const unpinnedProjects = projects.filter((project) => project.pinned !== true);
 
     if (pinnedProjects.length > 0) {
       console.log(this.runtime.color.bold('Pinned Projects'));
-      this.renderProjectRows(projects, pinnedProjects);
+      this.renderProjectRows(projects, pinnedProjects, selectedKey);
       console.log('');
     }
 
     if (unpinnedProjects.length > 0) {
       console.log(this.runtime.color.bold('Projects'));
-      this.renderProjectRows(projects, unpinnedProjects);
+      this.renderProjectRows(projects, unpinnedProjects, selectedKey);
     }
 
     projects.forEach((project) => {
@@ -397,7 +420,7 @@ export class ProjectsPage {
     });
   }
 
-  renderProjectRows(projects, rowsProjects) {
+  renderProjectRows(projects, rowsProjects, selectedKey = null) {
     const color = this.runtime.color;
     const rows = [
       ['', color.bold('Project'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit'), color.bold('shortcut')]
@@ -415,7 +438,10 @@ export class ProjectsPage {
       const lastCommit = this.formatLastCommit(project);
 
       rowProjects.push(project);
-      rows.push([label, project.name, changes, net, modified, lastCommit, shortcut]);
+      const projectKey = String(projects.indexOf(project) + 1);
+      const isSelected = [projectKey, projectKey + 'p', projectKey + 'a'].includes(String(selectedKey || '').toLowerCase());
+
+      rows.push(this.highlightRow([label, project.name, changes, net, modified, lastCommit, shortcut], isSelected));
     });
 
     const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
@@ -424,6 +450,41 @@ export class ProjectsPage {
     console.log(formattedRows[0]);
     console.log('');
     rowsProjects.forEach((project) => console.log(formattedProjectRows.get(project)));
+  }
+
+  highlightRow(cells, isSelected) {
+    if (!isSelected || typeof this.runtime.color.selected !== 'function') {
+      return cells;
+    }
+
+    return cells.map((cell) => this.runtime.color.selected(cell));
+  }
+
+  renderLegacyRepoRows(repos, color, selectedKey = null) {
+    const rows = [
+      ['', color.bold('Repo'), color.bold('+ / -'), color.bold('net'), color.bold('modified'), color.bold('last commit')]
+    ];
+
+    repos.forEach((repo, index) => {
+      const hotkey = color.hotkey ?? color.bold;
+      const prefix = repo.net >= 0 ? '+' : '';
+      const net = prefix + String(repo.net);
+      const cells = [
+        hotkey(String(index + 1) + '.'),
+        repo.name,
+        color.green('+' + String(repo.added)) + ' / ' + color.red('-' + String(repo.removed)),
+        repo.net < 0 ? color.red(net) : color.green(net),
+        repo.warning ? color.yellow('warning') : this.formatModifiedFiles(repo.modifiedFiles),
+        repo.lastCommitAgo ?? 'N/A'
+      ];
+
+      rows.push(this.highlightRow(cells, String(selectedKey || '') === String(index + 1)));
+    });
+
+    const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
+    console.log(formattedRows[0]);
+    console.log('');
+    formattedRows.slice(1).forEach((row) => console.log(row));
   }
 
   renderProjectsSummary(projects) {

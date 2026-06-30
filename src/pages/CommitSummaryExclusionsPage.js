@@ -16,31 +16,48 @@ export class CommitSummaryExclusionsPage {
     const projectName = this.params.projectName ?? '';
     const excludedPaths = this.runtime.settingsStore.listCommitSummaryExcludedPaths(repoPath);
 
-    console.clear();
-    console.log(color.bold('Commit Summary Exclusions'));
-    console.log('');
-    console.log('Repo: ' + [projectName, repoPath].filter(Boolean).join(' / '));
-    console.log('');
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Commit Summary Exclusions'));
+      console.log('');
+      console.log('Repo: ' + [projectName, repoPath].filter(Boolean).join(' / '));
+      console.log('');
 
-    if (excludedPaths.length === 0) {
-      console.log(color.dim('No excluded paths.'));
-    } else {
-      this.renderExcludedPaths(excludedPaths);
-    }
+      if (excludedPaths.length === 0) {
+        console.log(color.dim('No excluded paths.'));
+      } else {
+        this.renderExcludedPaths(excludedPaths, selectedKey);
+      }
 
-    console.log('');
-    console.log(color.dim('These paths are left out of Generate commit prompts and are not disclosed as omitted files.'));
-    console.log('');
-    formatActionColumns([
-      color.bold('A.') + ' Add path',
-      color.bold('E.') + ' Edit path',
-      color.bold('D.') + ' Delete path',
-      color.bold('C.') + ' Clear list',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+      console.log('');
+      console.log(color.dim('These paths are left out of Generate commit prompts and are not disclosed as omitted files.'));
+      console.log('');
+      formatActionColumns([
+        color.bold('A.') + ' Add path',
+        color.bold('E.') + ' Edit path',
+        color.bold('D.') + ' Delete path',
+        color.bold('C.') + ' Clear list',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
 
-    const answer = await promptAction('Action: ');
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        ...excludedPaths.map((relativePath, index) => {
+          return { key: String(index + 1), label: 'Edit: ' + relativePath };
+        }),
+        { key: 'a', label: 'Add path' },
+        { key: 'e', label: 'Edit path' },
+        { key: 'd', label: 'Delete path' },
+        { key: 'c', label: 'Clear list' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {
@@ -75,7 +92,7 @@ export class CommitSummaryExclusionsPage {
     await this.router.replace('commitSummaryExclusions', this.params);
   }
 
-  renderExcludedPaths(excludedPaths) {
+  renderExcludedPaths(excludedPaths, selectedKey = null) {
     const color = this.runtime.color;
     const hotkey = color.hotkey ?? color.bold;
     const rows = [
@@ -83,13 +100,23 @@ export class CommitSummaryExclusionsPage {
     ];
 
     excludedPaths.forEach((relativePath, index) => {
-      rows.push([
+      const cells = [
         hotkey(String(index + 1) + '.'),
         relativePath
-      ]);
+      ];
+
+      rows.push(this.highlightRow(cells, String(selectedKey || '') === String(index + 1)));
     });
 
     formatTable(rows, { leaderGap: color.dim('···') }).forEach((row) => console.log(row));
+  }
+
+  highlightRow(cells, isSelected) {
+    if (!isSelected || typeof this.runtime.color.selected !== 'function') {
+      return cells;
+    }
+
+    return cells.map((cell) => this.runtime.color.selected(cell));
   }
 
   async addPath() {

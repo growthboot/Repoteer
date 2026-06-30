@@ -13,42 +13,41 @@ export class ArchivePage {
     const projects = this.runtime.projectManager.listArchivedProjects()
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    console.clear();
-    console.log(color.bold('Archived Projects'));
-    console.log('');
-
-    if (projects.length === 0) {
-      console.log(color.dim('No archived projects.'));
-    } else {
-      const rows = [
-        ['', color.bold('Project'), color.bold('path')]
-      ];
-
-      projects.forEach((project, index) => {
-        const hotkey = color.hotkey ?? color.bold;
-
-        rows.push([
-          hotkey(String(index + 1) + '.'),
-          project.name,
-          project.path
-        ]);
-      });
-
-      const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
-      console.log(formattedRows[0]);
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Archived Projects'));
       console.log('');
-      formattedRows.slice(1).forEach((row) => console.log(row));
-    }
 
-    console.log('');
-    formatActionColumns([
-      '[0-9]U. Unarchive project',
-      '[0-9]D. Delete project',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+      if (projects.length === 0) {
+        console.log(color.dim('No archived projects.'));
+      } else {
+        this.renderProjects(projects, selectedKey);
+      }
 
-    const answer = await promptAction('Action: ');
+      console.log('');
+      formatActionColumns([
+        '[0-9]U. Unarchive project',
+        '[0-9]D. Delete project',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        ...projects.map((project, index) => {
+          return { key: String(index + 1) + 'u', label: 'Unarchive: ' + project.name };
+        }),
+        ...projects.map((project, index) => {
+          return { key: String(index + 1) + 'd', label: 'Delete: ' + project.name };
+        }),
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {
@@ -116,5 +115,37 @@ export class ArchivePage {
     console.log(color.green('Project deleted.'));
     await promptLine('Press Enter to continue.');
     await this.router.replace('archive');
+  }
+
+  renderProjects(projects, selectedKey = null) {
+    const color = this.runtime.color;
+    const rows = [
+      ['', color.bold('Project'), color.bold('path')]
+    ];
+
+    projects.forEach((project, index) => {
+      const hotkey = color.hotkey ?? color.bold;
+      const key = String(index + 1);
+      const cells = [
+        hotkey(key + '.'),
+        project.name,
+        project.path
+      ];
+
+      rows.push(this.highlightRow(cells, [key + 'u', key + 'd'].includes(String(selectedKey || '').toLowerCase())));
+    });
+
+    const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
+    console.log(formattedRows[0]);
+    console.log('');
+    formattedRows.slice(1).forEach((row) => console.log(row));
+  }
+
+  highlightRow(cells, isSelected) {
+    if (!isSelected || typeof this.runtime.color.selected !== 'function') {
+      return cells;
+    }
+
+    return cells.map((cell) => this.runtime.color.selected(cell));
   }
 }

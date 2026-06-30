@@ -16,35 +16,47 @@ export class DiffPage {
     const repo = this.findRepo();
     const title = repo ? repo.name : 'repo';
 
-    this.runtime.terminal?.clearScreen();
-    console.clear();
-    console.log(color.bold('Repo: ' + title + ' (diff)'));
-    console.log('');
-
     const result = repo ? this.runtime.git.getFullDiff(repo.path) : {
       ok: false,
       diff: '',
       warning: 'Repo not found.'
     };
 
-    if (!result.ok) {
-      console.log(color.yellow(result.warning));
-    } else if (!result.diff) {
-      console.log(color.dim('No diff.'));
-    } else {
-      console.log(formatDiffForDisplay(result.diff, color));
-    }
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Repo: ' + title + ' (diff)'));
+      console.log('');
 
-    console.log('');
-    formatActionColumns([
-      color.bold('C.') + ' Copy full diff',
-      color.bold('G.') + ' Generate summary',
-      color.bold('E.') + ' Security review',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+      if (!result.ok) {
+        console.log(color.yellow(result.warning));
+      } else if (!result.diff) {
+        console.log(color.dim('No diff.'));
+      } else {
+        console.log(formatDiffForDisplay(result.diff, color));
+      }
 
-    const answer = await promptAction('Action: ');
+      console.log('');
+      formatActionColumns([
+        color.bold('C.') + ' Copy full diff',
+        color.bold('G.') + ' Generate summary',
+        color.bold('E.') + ' Security review',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        { key: 'c', label: 'Copy full diff' },
+        { key: 'g', label: 'Generate summary' },
+        { key: 'e', label: 'Security review' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {

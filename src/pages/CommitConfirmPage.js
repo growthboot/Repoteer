@@ -24,20 +24,36 @@ export class CommitConfirmPage {
       return;
     }
 
-    console.log('Title: ' + this.params.title);
-    console.log('Body: ' + (this.params.body || ''));
-    console.log('Repo: ' + repo.path);
-    console.log('Changed files: ' + String(repo.modifiedFiles));
-    console.log('');
-    formatActionColumns([
-      color.bold('C.') + ' Confirm',
-      color.bold('T.') + ' Edit title',
-      color.bold('E.') + ' Edit body',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Confirm Commit'));
+      console.log('');
+      console.log('Title: ' + this.params.title);
+      console.log('Body: ' + (this.params.body || ''));
+      console.log('Repo: ' + repo.path);
+      console.log('Changed files: ' + String(repo.modifiedFiles));
+      console.log('');
+      formatActionColumns([
+        color.bold('C.') + ' Confirm',
+        color.bold('T.') + ' Edit title',
+        color.bold('E.') + ' Edit body',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
 
-    const answer = await promptAction('Action: ');
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        { key: 'c', label: 'Confirm' },
+        { key: 't', label: 'Edit title' },
+        { key: 'e', label: 'Edit body' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {

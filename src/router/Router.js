@@ -150,6 +150,22 @@ export class Router {
     return actions;
   }
 
+  globalActionChoices(options = {}) {
+    const includeBack = options.back !== false;
+    const choices = [
+      { key: 'h', label: 'Home' },
+      { key: 'r', label: 'Refresh' },
+      { key: 's', label: 'Settings' },
+      { key: 'q', label: 'Quit' }
+    ];
+
+    if (includeBack) {
+      choices.push({ key: 'b', label: 'Back' });
+    }
+
+    return choices;
+  }
+
   current() {
     return this.stack[this.stack.length - 1] ?? null;
   }

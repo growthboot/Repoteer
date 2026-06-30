@@ -25,33 +25,47 @@ export class BranchPage {
       return;
     }
 
-    console.log(color.bold('Switch Branch: ' + project.name + ' / ' + repo.name));
-    console.log('');
-    console.log('Current branch: ' + formatBranchName(repo, color));
-    console.log('');
-
-    if (repo.warning) {
-      console.log(color.yellow(repo.warning));
-      console.log('');
-    }
-
     const branches = this.runtime.branchManager.listLocalBranches(repo.path);
 
-    if (!branches.ok) {
-      console.log(color.yellow(branches.warning));
-    } else if (branches.branches.length === 0) {
-      console.log(color.dim('No local branches found.'));
-    } else {
-      this.renderBranches(branches.branches, repo, color);
-    }
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('Switch Branch: ' + project.name + ' / ' + repo.name));
+      console.log('');
+      console.log('Current branch: ' + formatBranchName(repo, color));
+      console.log('');
 
-    console.log('');
-    formatActionColumns([
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+      if (repo.warning) {
+        console.log(color.yellow(repo.warning));
+        console.log('');
+      }
 
-    const answer = await promptAction('Branch number/name: ');
+      if (!branches.ok) {
+        console.log(color.yellow(branches.warning));
+      } else if (branches.branches.length === 0) {
+        console.log(color.dim('No local branches found.'));
+      } else {
+        this.renderBranches(branches.branches, repo, color, selectedKey);
+      }
+
+      console.log('');
+      formatActionColumns([
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
+
+    render(null);
+
+    const answer = await promptAction('Branch number/name: ', {
+      choices: [
+        ...(branches.ok ? branches.branches.map((branch, index) => {
+          return { key: String(index + 1), label: 'Branch: ' + branch };
+        }) : []),
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim();
 
     if (await this.router.handleGlobalAction(key)) {
@@ -84,7 +98,7 @@ export class BranchPage {
     await this.confirmAndSwitch(repo, branchName);
   }
 
-  renderBranches(branches, repo, color) {
+  renderBranches(branches, repo, color, selectedKey = null) {
     const rows = [
       ['', color.bold('Branch'), color.bold('state')]
     ];
@@ -92,17 +106,27 @@ export class BranchPage {
     branches.forEach((branch, index) => {
       const hotkey = color.hotkey ?? color.bold;
 
-      rows.push([
+      const cells = [
         hotkey(String(index + 1) + '.'),
         formatBranchValue(branch, color),
         !repo.detached && repo.branch === branch ? color.green('current') : ''
-      ]);
+      ];
+
+      rows.push(this.highlightRow(cells, String(selectedKey || '') === String(index + 1)));
     });
 
     const formattedRows = formatTable(rows, { leaderGap: color.dim('···') });
     console.log(formattedRows[0]);
     console.log('');
     formattedRows.slice(1).forEach((row) => console.log(row));
+  }
+
+  highlightRow(cells, isSelected) {
+    if (!isSelected || typeof this.runtime.color.selected !== 'function') {
+      return cells;
+    }
+
+    return cells.map((cell) => this.runtime.color.selected(cell));
   }
 
   async confirmAndSwitch(repo, branchName) {

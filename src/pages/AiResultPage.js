@@ -12,22 +12,34 @@ export class AiResultPage {
     const color = this.runtime.color;
     const tool = this.runtime.aiPromptManager.getTool(this.params.toolId);
 
-    console.clear();
-    console.log(color.bold('AI: ' + (tool?.title || 'Result') + ' result'));
-    console.log('');
-    console.log('Provider: ' + (this.params.providerTitle || 'Unknown provider'));
-    console.log('Repo: ' + this.formatRepoLabel());
-    console.log('');
-    console.log(String(this.params.result || '').trim() || color.dim('No result content.'));
-    console.log('');
-    formatActionColumns([
-      color.bold('C.') + ' Copy result',
-      color.bold('A.') + ' Run again',
-      ...this.router.globalActionItems(color)
-    ], { color }).forEach((row) => console.log(row));
-    console.log('');
+    const render = (selectedKey = null) => {
+      console.clear();
+      console.log(color.bold('AI: ' + (tool?.title || 'Result') + ' result'));
+      console.log('');
+      console.log('Provider: ' + (this.params.providerTitle || 'Unknown provider'));
+      console.log('Repo: ' + this.formatRepoLabel());
+      console.log('');
+      console.log(String(this.params.result || '').trim() || color.dim('No result content.'));
+      console.log('');
+      formatActionColumns([
+        color.bold('C.') + ' Copy result',
+        color.bold('A.') + ' Run again',
+        ...this.router.globalActionItems(color)
+      ], { color, selectedKey }).forEach((row) => console.log(row));
+      console.log('');
+    };
 
-    const answer = await promptAction('Action: ');
+    render(null);
+
+    const answer = await promptAction('Action: ', {
+      choices: [
+        { key: 'c', label: 'Copy result' },
+        { key: 'a', label: 'Run again' },
+        ...this.router.globalActionChoices()
+      ],
+      color,
+      render
+    });
     const key = answer.trim().toLowerCase();
 
     if (await this.router.handleGlobalAction(key)) {
