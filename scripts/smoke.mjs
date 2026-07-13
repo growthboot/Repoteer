@@ -26,6 +26,7 @@ import { stripAnsi } from '../src/utils/color.js';
 import { formatDiffForDisplay } from '../src/utils/diff.js';
 import { formatBranchName } from '../src/utils/format.js';
 import { validateProjectInput } from '../src/utils/validation.js';
+import { selectFrameViewport } from '../src/utils/input.js';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 
@@ -1692,6 +1693,22 @@ function smokeProjectItemsPath() {
   assert(clipboardItems[0].text === 'First clipboard line\nSecond clipboard line', 'clipboard item text mismatch');
   assert(fs.readFileSync(clipboardFile, 'utf8') === 'First clipboard line\nSecond clipboard line', 'clipboard copied text mismatch');
 
+  const navigationPanel = new ProjectItemsPanel({
+    runtime: {
+      bookmarksStore: { listForProject: () => bookmarks },
+      commandsStore: { listForProject: () => commands },
+      clipboardItemsStore: { listForProject: () => clipboardItems }
+    },
+    color: {},
+    showProject() {}
+  });
+  const navigationKeys = navigationPanel.actionChoices('Items Project').map((choice) => choice.key);
+
+  assert(
+    navigationKeys.join(',') === 'm1,c1,p1,am,ac,ap',
+    'project items arrow choices should follow visible row order without hidden duplicate stops'
+  );
+
   const bookmarkCopyInput = [
     '1',
     'm1',
@@ -1975,6 +1992,33 @@ function smokeDiffPagesDoNotTruncateVisibleDiffs() {
   assert(!filePageSource.includes('[truncated]'), 'file diff page should not append visible truncation markers');
   assert(!diffPageSource.includes('MAX_VISIBLE_DIFF_CHARS'), 'full diff page should not cap visible diff characters');
   assert(!filePageSource.includes('MAX_VISIBLE_DIFF_CHARS'), 'file diff page should not cap visible diff characters');
+}
+
+function smokeLongInteractiveFrameViewport() {
+  const lines = Array.from({ length: 12 }, (_, index) => 'row ' + String(index + 1));
+  const initial = selectFrameViewport(lines, {
+    height: 5,
+    selectedLine: 1,
+    start: 0
+  });
+  const movedDown = selectFrameViewport(lines, {
+    height: 5,
+    selectedLine: 7,
+    start: initial.start
+  });
+  const movedUp = selectFrameViewport(lines, {
+    height: 5,
+    selectedLine: 2,
+    start: movedDown.start
+  });
+
+  assert(initial.start === 0, 'long frame should initially keep the top of the screen visible');
+  assert(initial.lines.join(',') === 'row 1,row 2,row 3,row 4,row 5', 'long frame initial viewport mismatch');
+  assert(movedDown.start === 3, 'long frame should scroll just enough to reveal the selected row');
+  assert(movedDown.lines.join(',') === 'row 4,row 5,row 6,row 7,row 8', 'long frame down viewport mismatch');
+  assert(movedUp.start === 2, 'long frame should scroll back when selection moves above the viewport');
+  assert(movedUp.lines.join(',') === 'row 3,row 4,row 5,row 6,row 7', 'long frame up viewport mismatch');
+  assert(new Set(movedDown.lines).size === movedDown.lines.length, 'long frame viewport should not duplicate stale rows');
 }
 
 async function smokeRouterTerminalModePath() {
@@ -2942,6 +2986,7 @@ smokeScannerMissingProjectPath();
 smokeDiffFormatting();
 smokeDiffPagesUseNormalScroll();
 smokeDiffPagesDoNotTruncateVisibleDiffs();
+smokeLongInteractiveFrameViewport();
 smokeDuplicateValidation();
 smokeTableFormatting();
 smokeBranchFormatting();

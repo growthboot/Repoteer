@@ -74,12 +74,10 @@ export class ProjectsPage {
         { key: 'a', label: 'Add project' },
         { key: 'v', label: 'View archive' },
         { key: 'y', label: 'History' },
-        ...projects.map((project, index) => {
-          return { key: String(index + 1) + 'p', label: 'Pin or unpin: ' + project.name };
-        }),
-        ...projects.map((project, index) => {
-          return { key: String(index + 1) + 'a', label: 'Archive: ' + project.name };
-        }),
+        ...(projects.length > 0 ? [
+          { key: 'pinProject', numberedSuffix: 'p', label: 'Pin or unpin selected project' },
+          { key: 'archiveProject', numberedSuffix: 'a', label: 'Archive selected project' }
+        ] : []),
         ...this.router.globalActionChoices({ back: false })
       ],
       color,

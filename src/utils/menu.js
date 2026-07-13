@@ -51,7 +51,21 @@ function isSelectedAction(action, selectedKey) {
   const actionKey = match[1].toLowerCase();
   const selected = String(selectedKey).toLowerCase();
 
-  return actionKey === selected;
+  return actionKey === selected || matchesRangeAction(actionKey, selected);
+}
+
+function matchesRangeAction(actionKey, selected) {
+  const match = /^\[0-9\](.+)$/.exec(actionKey);
+
+  if (!match) {
+    return false;
+  }
+
+  return new RegExp('^[0-9]+' + escapeRegExp(match[1]) + '$').test(selected);
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function highlightValue(value, color) {
