@@ -72,12 +72,15 @@ function normalizeChoices(choices) {
       if (typeof choice === 'string') {
         return {
           key: choice,
+          renderKey: choice,
           label: choice
         };
       }
 
       return {
         key: String(choice.key ?? ''),
+        renderKey: String(choice.renderKey ?? choice.key ?? ''),
+        numberedSuffix: choice.numberedSuffix ? String(choice.numberedSuffix) : '',
         label: String(choice.label ?? choice.key ?? '')
       };
     })
@@ -91,9 +94,11 @@ async function readKeyAction(label, choices, options) {
     const renderScreen = typeof options.render === 'function' ? options.render : null;
     const frameCache = renderScreen ? createFrameCache(renderScreen, choices) : null;
     let selectedIndex = 0;
+    let numberedContext = getInitialNumberedContext(choices);
     let buffer = '';
     let rendered = false;
     let frameLines = null;
+    let viewportStart = 0;
 
     const cleanup = () => {
       stdin.off('data', onData);
@@ -129,7 +134,7 @@ async function readKeyAction(label, choices, options) {
         }
 
         if (character === '\r' || character === '\n') {
-          finish(buffer.length > 0 ? buffer : choices[selectedIndex].key);
+          finish(buffer.length > 0 ? buffer : getChoiceSubmitKey(choices[selectedIndex], numberedContext));
           return;
         }
 
@@ -167,11 +172,19 @@ async function readKeyAction(label, choices, options) {
 
     const render = () => {
       const selectedChoice = choices[selectedIndex];
+      updateNumberedContext(selectedChoice);
+      const selectedRenderKey = getChoiceRenderKey(selectedChoice, numberedContext);
 
       if (renderScreen) {
-        const nextFrameLines = frameCache.get(selectedChoice.key);
+        const fullFrameLines = frameCache.get(selectedRenderKey);
+        const viewport = selectFrameViewport(fullFrameLines, {
+          height: getFrameViewportHeight(),
+          selectedLine: findSelectedLine(fullFrameLines),
+          start: viewportStart
+        });
+        const nextFrameLines = viewport.lines;
+        viewportStart = viewport.start;
         drawFrame(frameLines, nextFrameLines);
-        clearPreviousPromptLine(frameLines, nextFrameLines);
         frameLines = nextFrameLines;
       }
 
@@ -194,7 +207,15 @@ async function readKeyAction(label, choices, options) {
       }
 
       rendered = true;
-      frameCache?.warmAround(selectedIndex);
+      frameCache?.warmAround(selectedIndex, numberedContext);
+    };
+
+    const updateNumberedContext = (choice) => {
+      const key = String(choice?.key || '');
+
+      if (/^[0-9]+$/.test(key)) {
+        numberedContext = key;
+      }
     };
 
     if (typeof stdin.setRawMode === 'function') {
@@ -229,7 +250,7 @@ function createFrameCache(renderScreen, choices) {
         return;
       }
 
-      get(choices[warmIndex].key);
+      get(getChoiceRenderKey(choices[warmIndex]));
       warmIndex += 1;
       setImmediate(step);
     };
@@ -237,7 +258,7 @@ function createFrameCache(renderScreen, choices) {
     setImmediate(step);
   };
 
-  const warmAround = (selectedIndex) => {
+  const warmAround = (selectedIndex, numberedContext = '') => {
     if (canceled || choices.length < 2) {
       return;
     }
@@ -245,8 +266,8 @@ function createFrameCache(renderScreen, choices) {
     const previousIndex = (selectedIndex - 1 + choices.length) % choices.length;
     const nextIndex = (selectedIndex + 1) % choices.length;
 
-    get(choices[previousIndex].key);
-    get(choices[nextIndex].key);
+    get(getChoiceRenderKey(choices[previousIndex], numberedContext));
+    get(getChoiceRenderKey(choices[nextIndex], numberedContext));
   };
 
   const cancel = () => {
@@ -254,6 +275,28 @@ function createFrameCache(renderScreen, choices) {
   };
 
   return { get, warm, warmAround, cancel };
+}
+
+function getChoiceRenderKey(choice, numberedContext = '') {
+  if (choice?.numberedSuffix) {
+    return getChoiceSubmitKey(choice, numberedContext);
+  }
+
+  return String(choice?.renderKey || choice?.key || '');
+}
+
+function getChoiceSubmitKey(choice, numberedContext = '') {
+  if (choice?.numberedSuffix) {
+    return String(numberedContext || '1') + choice.numberedSuffix;
+  }
+
+  return String(choice?.key || '');
+}
+
+function getInitialNumberedContext(choices) {
+  const numberedChoice = choices.find((choice) => /^[0-9]+$/.test(String(choice.key || '')));
+
+  return numberedChoice ? numberedChoice.key : '1';
 }
 
 function captureRenderedFrame(renderScreen, selectedKey) {
@@ -299,8 +342,59 @@ function countOccurrences(value, pattern) {
   return String(value ?? '').split(pattern).length - 1;
 }
 
+export function selectFrameViewport(lines, options = {}) {
+  const frameLines = Array.isArray(lines) ? lines : [];
+  const requestedHeight = Number(options.height);
+  const height = Number.isFinite(requestedHeight) && requestedHeight > 0
+    ? Math.floor(requestedHeight)
+    : frameLines.length;
+
+  if (frameLines.length <= height) {
+    return { lines: frameLines.slice(), start: 0 };
+  }
+
+  const maxStart = Math.max(0, frameLines.length - height);
+  const requestedStart = Number(options.start);
+  let start = Number.isFinite(requestedStart)
+    ? Math.min(maxStart, Math.max(0, Math.floor(requestedStart)))
+    : 0;
+  const selectedLine = Number(options.selectedLine);
+
+  if (Number.isFinite(selectedLine) && selectedLine >= 0) {
+    if (selectedLine < start) {
+      start = Math.floor(selectedLine);
+    } else if (selectedLine >= start + height) {
+      start = Math.floor(selectedLine) - height + 1;
+    }
+  }
+
+  start = Math.min(maxStart, Math.max(0, start));
+
+  return {
+    lines: frameLines.slice(start, start + height),
+    start
+  };
+}
+
+function findSelectedLine(lines) {
+  return lines.findIndex((line) => {
+    const value = String(line ?? '');
+    return value.includes(SELECTED_OPEN) || value.includes(SELECTED_ROW_OPEN);
+  });
+}
+
+function getFrameViewportHeight() {
+  const rows = Number(output.rows);
+
+  if (!Number.isFinite(rows) || rows <= 1) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.max(1, Math.floor(rows) - 1);
+}
+
 function drawFrame(previousLines, nextLines) {
-  if (!previousLines) {
+  if (!previousLines || previousLines.length !== nextLines.length) {
     let value = '\u001b[2J\u001b[H';
 
     if (nextLines.length > 0) {
@@ -328,14 +422,6 @@ function drawFrame(previousLines, nextLines) {
   if (chunks.length > 0) {
     output.write(chunks.join(''));
   }
-}
-
-function clearPreviousPromptLine(previousLines, nextLines) {
-  if (!previousLines || previousLines.length === nextLines.length) {
-    return;
-  }
-
-  output.write('\u001b[' + String(previousLines.length + 1) + ';1H\r\u001b[2K');
 }
 
 function formatSelectedChoice(choice, color) {

@@ -25,25 +25,31 @@ export class ProjectItemsPanel {
     const commands = this.runtime.commandsStore.listForProject(projectName);
     const clipboardItems = this.runtime.clipboardItemsStore.listForProject(projectName);
     const choices = [];
+    const rowCount = Math.max(bookmarks.length + 1, commands.length + 1, clipboardItems.length + 1);
 
-    bookmarks.forEach((bookmark, index) => {
-      choices.push({ key: 'm' + String(index + 1), label: 'Bookmark: ' + bookmark.title });
-    });
+    for (let index = 0; index < rowCount; index += 1) {
+      const bookmark = bookmarks[index] ?? null;
+      const command = commands[index] ?? null;
+      const clipboardItem = clipboardItems[index] ?? null;
 
-    choices.push({ key: 'am', label: 'Add bookmark' });
+      if (bookmark) {
+        choices.push({ key: 'm' + String(index + 1), label: 'Bookmark: ' + bookmark.title });
+      } else if (index === bookmarks.length) {
+        choices.push({ key: 'am', label: 'Add bookmark' });
+      }
 
-    commands.forEach((command, index) => {
-      choices.push({ key: 'c' + String(index + 1), label: 'Command: ' + command.title });
-    });
+      if (command) {
+        choices.push({ key: 'c' + String(index + 1), label: 'Command: ' + command.title });
+      } else if (index === commands.length) {
+        choices.push({ key: 'ac', label: 'Add command' });
+      }
 
-    choices.push({ key: 'ac', label: 'Add command' });
-
-    clipboardItems.forEach((item, index) => {
-      choices.push({ key: 'p' + String(index + 1), label: 'Copy clipboard: ' + item.title });
-      choices.push({ key: 'vp' + String(index + 1), label: 'View clipboard: ' + item.title });
-    });
-
-    choices.push({ key: 'ap', label: 'Add clipboard' });
+      if (clipboardItem) {
+        choices.push({ key: 'p' + String(index + 1), label: 'Copy clipboard: ' + clipboardItem.title });
+      } else if (index === clipboardItems.length) {
+        choices.push({ key: 'ap', label: 'Add clipboard' });
+      }
+    }
 
     return choices;
   }
