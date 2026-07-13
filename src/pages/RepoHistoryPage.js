@@ -1,5 +1,5 @@
 import path from 'path';
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { stripAnsi } from '../utils/color.js';
 
@@ -68,9 +68,11 @@ export class RepoHistoryPage {
         ...(history.ok ? history.commits.map((commit, index) => {
           return { key: String(index + 1), label: 'Commit: ' + (commit.title || commit.shortHash) };
         }) : []),
-        ...(history.ok && history.hasNextPage ? [{ key: 'n', label: 'Next page' }] : []),
-        ...(history.ok && page > 0 ? [{ key: 'p', label: 'Previous page' }] : []),
-        ...this.router.globalActionChoices()
+        ...gridChoices([
+          ...(history.ok && history.hasNextPage ? [{ key: 'n', label: 'Next page' }] : []),
+          ...(history.ok && page > 0 ? [{ key: 'p', label: 'Previous page' }] : []),
+          ...this.router.globalActionChoices()
+        ])
       ],
       color,
       render

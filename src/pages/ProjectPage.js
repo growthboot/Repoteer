@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatBranchName, formatShortcut } from '../utils/format.js';
 import { formatTable } from '../utils/table.js';
 import { formatActionColumns } from '../utils/menu.js';
@@ -89,14 +89,16 @@ export class ProjectPage {
           return { key: String(index + 1), label: 'Repo: ' + repo.name };
         }),
         ...itemsPanel.actionChoices(project.name),
-        { key: 't', label: hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes' },
-        { key: 'd', label: 'Delete project' },
-        { key: 'n', label: 'Rename project' },
-        { key: 'c', label: 'Copy Project Path' },
-        { key: 'l', label: 'Open project in terminal' },
-        { key: 'o', label: 'Open project in ' + this.formatFileExplorerName() },
-        { key: 'y', label: 'History' },
-        ...this.router.globalActionChoices()
+        ...gridChoices([
+          { key: 't', label: hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes' },
+          { key: 'd', label: 'Delete project' },
+          { key: 'n', label: 'Rename project' },
+          { key: 'c', label: 'Copy Project Path' },
+          { key: 'l', label: 'Open project in terminal' },
+          { key: 'o', label: 'Open project in ' + this.formatFileExplorerName() },
+          { key: 'y', label: 'History' },
+          ...this.router.globalActionChoices()
+        ])
       ],
       color,
       render

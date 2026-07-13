@@ -26,7 +26,7 @@ import { stripAnsi } from '../src/utils/color.js';
 import { formatDiffForDisplay } from '../src/utils/diff.js';
 import { formatBranchName } from '../src/utils/format.js';
 import { validateProjectInput } from '../src/utils/validation.js';
-import { selectFrameViewport } from '../src/utils/input.js';
+import { gridChoices, moveSpreadsheetSelection, selectFrameViewport } from '../src/utils/input.js';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 
@@ -1709,6 +1709,12 @@ function smokeProjectItemsPath() {
     'project items arrow choices should follow visible row order without hidden duplicate stops'
   );
 
+  const movedDownInItems = moveSpreadsheetSelection(navigationPanel.actionChoices('Items Project'), 1, 'down', 1);
+  const wrappedRightInItems = moveSpreadsheetSelection(navigationPanel.actionChoices('Items Project'), 2, 'right', 2);
+
+  assert(movedDownInItems.index === 4, 'project items down arrow should stay in the command column');
+  assert(wrappedRightInItems.index === 0, 'project items right arrow should wrap within the same row');
+
   const bookmarkCopyInput = [
     '1',
     'm1',
@@ -2019,6 +2025,60 @@ function smokeLongInteractiveFrameViewport() {
   assert(movedUp.start === 2, 'long frame should scroll back when selection moves above the viewport');
   assert(movedUp.lines.join(',') === 'row 3,row 4,row 5,row 6,row 7', 'long frame up viewport mismatch');
   assert(new Set(movedDown.lines).size === movedDown.lines.length, 'long frame viewport should not duplicate stale rows');
+}
+
+function smokeSpreadsheetArrowNavigation() {
+  const choices = [
+    { key: '1' },
+    { key: '2' },
+    ...gridChoices([
+      { key: 'a' },
+      { key: 'b' },
+      { key: 'c' },
+      { key: 'd' }
+    ])
+  ];
+  const movedRight = moveSpreadsheetSelection(choices, 2, 'right', 0);
+  const movedDown = moveSpreadsheetSelection(choices, movedRight.index, 'down', movedRight.preferredColumn);
+  const wrappedRight = moveSpreadsheetSelection(choices, movedDown.index, 'right', movedDown.preferredColumn);
+  const wrappedLeft = moveSpreadsheetSelection(choices, wrappedRight.index, 'left', wrappedRight.preferredColumn);
+  const movedUp = moveSpreadsheetSelection(choices, wrappedLeft.index, 'up', wrappedLeft.preferredColumn);
+
+  assert(movedRight.index === 3, 'right arrow should move to the next column on the same row');
+  assert(movedDown.index === 5, 'down arrow should stay in the same column on the next row');
+  assert(wrappedRight.index === 4, 'right arrow should wrap from the last column to the first column');
+  assert(wrappedLeft.index === 5, 'left arrow should wrap from the first column to the last column');
+  assert(movedUp.index === 3, 'up arrow should stay in the same column on the previous row');
+
+  const firstRow = {};
+  const shortRow = {};
+  const lastRow = {};
+  const unevenChoices = [
+    { key: 'a', navigationRow: firstRow, navigationColumn: 0 },
+    { key: 'b', navigationRow: firstRow, navigationColumn: 1 },
+    { key: 'c', navigationRow: firstRow, navigationColumn: 2 },
+    { key: 'd', navigationRow: shortRow, navigationColumn: 0 },
+    { key: 'e', navigationRow: lastRow, navigationColumn: 0 },
+    { key: 'f', navigationRow: lastRow, navigationColumn: 1 },
+    { key: 'g', navigationRow: lastRow, navigationColumn: 2 }
+  ];
+  const movedToShortRow = moveSpreadsheetSelection(unevenChoices, 2, 'down', 2);
+  const restoredColumn = moveSpreadsheetSelection(
+    unevenChoices,
+    movedToShortRow.index,
+    'down',
+    movedToShortRow.preferredColumn
+  );
+  const stoppedAtBottom = moveSpreadsheetSelection(
+    unevenChoices,
+    restoredColumn.index,
+    'down',
+    restoredColumn.preferredColumn
+  );
+
+  assert(movedToShortRow.index === 3, 'vertical navigation should use the nearest available cell on a short row');
+  assert(restoredColumn.index === 6, 'vertical navigation should restore the preferred column when it becomes available');
+  assert(stoppedAtBottom.index === 6, 'down arrow should stop on the bottom row instead of wrapping');
 }
 
 async function smokeRouterTerminalModePath() {
@@ -2987,6 +3047,7 @@ smokeDiffFormatting();
 smokeDiffPagesUseNormalScroll();
 smokeDiffPagesDoNotTruncateVisibleDiffs();
 smokeLongInteractiveFrameViewport();
+smokeSpreadsheetArrowNavigation();
 smokeDuplicateValidation();
 smokeTableFormatting();
 smokeBranchFormatting();

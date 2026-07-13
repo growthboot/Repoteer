@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { formatTable } from '../utils/table.js';
 
@@ -48,13 +48,15 @@ export class AiProviderEditPage {
         ...editableRows.map((row, index) => {
           return { key: String(index + 1), label: row.label };
         }),
-        { key: 't', label: 'Toggle enabled' },
-        { key: 'n', label: 'Change title' },
-        { key: 'u', label: 'Change ' + (provider.type === 'local' ? 'endpoint URL' : 'URL') },
-        ...(provider.type === 'local' ? [{ key: 'o', label: 'Change model' }] : []),
-        { key: 'p', label: 'Change priority' },
-        { key: 'm', label: 'Change max prompt size' },
-        ...this.router.globalActionChoices()
+        ...gridChoices([
+          { key: 't', label: 'Toggle enabled' },
+          { key: 'n', label: 'Change title' },
+          { key: 'u', label: 'Change ' + (provider.type === 'local' ? 'endpoint URL' : 'URL') },
+          ...(provider.type === 'local' ? [{ key: 'o', label: 'Change model' }] : []),
+          { key: 'p', label: 'Change priority' },
+          { key: 'm', label: 'Change max prompt size' },
+          ...this.router.globalActionChoices()
+        ])
       ],
       color,
       render

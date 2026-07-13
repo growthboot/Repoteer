@@ -1,5 +1,5 @@
 import path from 'path';
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatTable } from '../utils/table.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { formatBranchName } from '../utils/format.js';
@@ -77,20 +77,22 @@ export class RepoPage {
         ...(fileStats.ok ? fileStats.files.map((file, index) => {
           return { key: String(index + 1), label: 'File: ' + file.file };
         }) : []),
-        { key: 'v', label: 'View full diff' },
-        { key: 'c', label: 'Copy full diff' },
-        { key: 'a', label: 'Commit review' },
-        { key: 'e', label: 'Security review' },
-        { key: 'm', label: 'Generate commit' },
-        { key: 'x', label: 'Commit summary exclusions' },
-        { key: 'f', label: 'Hotfix commit and push' },
-        { key: 'p', label: 'Write a commit and push' },
-        ...(repo.ahead > 0 ? [{ key: 'u', label: 'Push unpushed commits' }] : []),
-        { key: 't', label: 'Open repo in terminal' },
-        { key: 'o', label: 'Open repo in ' + this.formatFileExplorerName() },
-        { key: 'w', label: 'Switch branch' },
-        { key: 'y', label: 'History' },
-        ...this.router.globalActionChoices()
+        ...gridChoices([
+          { key: 'v', label: 'View full diff' },
+          { key: 'c', label: 'Copy full diff' },
+          { key: 'a', label: 'Commit review' },
+          { key: 'e', label: 'Security review' },
+          { key: 'm', label: 'Generate commit' },
+          { key: 'x', label: 'Commit summary exclusions' },
+          { key: 'f', label: 'Hotfix commit and push' },
+          { key: 'p', label: 'Write a commit and push' },
+          ...(repo.ahead > 0 ? [{ key: 'u', label: 'Push unpushed commits' }] : []),
+          { key: 't', label: 'Open repo in terminal' },
+          { key: 'o', label: 'Open repo in ' + this.formatFileExplorerName() },
+          { key: 'w', label: 'Switch branch' },
+          { key: 'y', label: 'History' },
+          ...this.router.globalActionChoices()
+        ])
       ],
       color,
       render

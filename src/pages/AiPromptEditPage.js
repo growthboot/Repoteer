@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 
 export class AiPromptEditPage {
@@ -44,12 +44,12 @@ export class AiPromptEditPage {
     render(null);
 
     const answer = await promptAction('Action: ', {
-      choices: [
+      choices: gridChoices([
         { key: 'y', label: 'Edit system prompt' },
         { key: 'p', label: 'Edit pre-prompt' },
         { key: 'x', label: 'Reset prompts' },
         ...this.router.globalActionChoices()
-      ],
+      ]),
       color,
       render
     });

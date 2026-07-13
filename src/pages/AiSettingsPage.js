@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { formatTable } from '../utils/table.js';
 
@@ -56,11 +56,13 @@ export class AiSettingsPage {
         ...promptTools.map((tool) => {
           return { key: this.promptActionForTool(tool.id), label: tool.title + ' prompt' };
         }),
-        { key: 'g', label: 'Set global max prompt size' },
-        { key: 'a', label: 'Add browser URL' },
-        { key: 'l', label: 'Add local model' },
-        { key: 'e', label: 'Edit provider' },
-        ...this.router.globalActionChoices()
+        ...gridChoices([
+          { key: 'g', label: 'Set global max prompt size' },
+          { key: 'a', label: 'Add browser URL' },
+          { key: 'l', label: 'Add local model' },
+          { key: 'e', label: 'Edit provider' },
+          ...this.router.globalActionChoices()
+        ])
       ],
       color,
       render

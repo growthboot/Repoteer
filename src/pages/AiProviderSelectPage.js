@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { formatTable } from '../utils/table.js';
 
@@ -62,8 +62,10 @@ export class AiProviderSelectPage {
         ...providers.map((provider, index) => {
           return { key: String(index + 1), label: provider.title };
         }),
-        { key: 'a', label: 'AI settings' },
-        ...this.router.globalActionChoices()
+        ...gridChoices([
+          { key: 'a', label: 'AI settings' },
+          ...this.router.globalActionChoices()
+        ])
       ],
       color,
       render
@@ -253,11 +255,11 @@ export class AiProviderSelectPage {
       render(null);
 
       const answer = await promptAction('Action: ', {
-        choices: [
+        choices: gridChoices([
           { key: '1', label: 'Read clipboard' },
           { key: '2', label: 'Paste manually' },
           ...this.router.globalActionChoices()
-        ],
+        ]),
         color,
         render
       });

@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatShortcut } from '../utils/format.js';
 import { formatTable } from '../utils/table.js';
 import { formatActionColumns } from '../utils/menu.js';
@@ -70,15 +70,17 @@ export class ProjectsPage {
         ...projects.map((project, index) => {
           return { key: String(index + 1), label: 'Project: ' + project.name };
         }),
-        { key: 't', label: hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes' },
-        { key: 'a', label: 'Add project' },
-        { key: 'v', label: 'View archive' },
-        { key: 'y', label: 'History' },
-        ...(projects.length > 0 ? [
-          { key: 'pinProject', numberedSuffix: 'p', label: 'Pin or unpin selected project' },
-          { key: 'archiveProject', numberedSuffix: 'a', label: 'Archive selected project' }
-        ] : []),
-        ...this.router.globalActionChoices({ back: false })
+        ...gridChoices([
+          { key: 't', label: hideCleanProjects ? 'Show all projects' : 'Hide projects without code changes' },
+          { key: 'a', label: 'Add project' },
+          { key: 'v', label: 'View archive' },
+          { key: 'y', label: 'History' },
+          ...(projects.length > 0 ? [
+            { key: 'pinProject', numberedSuffix: 'p', label: 'Pin or unpin selected project' },
+            { key: 'archiveProject', numberedSuffix: 'a', label: 'Archive selected project' }
+          ] : []),
+          ...this.router.globalActionChoices({ back: false })
+        ])
       ],
       color,
       render
@@ -223,11 +225,13 @@ export class ProjectsPage {
           return { key: String(index + 1), label: 'Repo: ' + repo.name };
         }),
         ...itemsPanel.actionChoices(project.name),
-        { key: 'b', label: 'Back' },
-        { key: 't', label: hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes' },
-        { key: 'd', label: 'Delete project' },
-        { key: 'n', label: 'Rename project' },
-        ...this.router.globalActionChoices({ back: false })
+        ...gridChoices([
+          { key: 'b', label: 'Back' },
+          { key: 't', label: hideReposWithoutLineChanges ? 'Show all repos' : 'Hide repos without line changes' },
+          { key: 'd', label: 'Delete project' },
+          { key: 'n', label: 'Rename project' },
+          ...this.router.globalActionChoices({ back: false })
+        ])
       ],
       color,
       render

@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 
 export class SettingsPage {
@@ -39,12 +39,12 @@ export class SettingsPage {
     render(null);
 
     const answer = await promptAction('Action: ', {
-      choices: [
+      choices: gridChoices([
         { key: 'l', label: 'Toggle alternate screen' },
         { key: 't', label: 'Toggle color' },
         { key: 'a', label: 'AI settings' },
         ...this.router.globalActionChoices()
-      ],
+      ]),
       color,
       render
     });

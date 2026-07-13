@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { formatTable } from '../utils/table.js';
 import { normalizeRelativePath } from '../utils/pathFilters.js';
@@ -49,11 +49,13 @@ export class CommitSummaryExclusionsPage {
         ...excludedPaths.map((relativePath, index) => {
           return { key: String(index + 1), label: 'Edit: ' + relativePath };
         }),
-        { key: 'a', label: 'Add path' },
-        { key: 'e', label: 'Edit path' },
-        { key: 'd', label: 'Delete path' },
-        { key: 'c', label: 'Clear list' },
-        ...this.router.globalActionChoices()
+        ...gridChoices([
+          { key: 'a', label: 'Add path' },
+          { key: 'e', label: 'Edit path' },
+          { key: 'd', label: 'Delete path' },
+          { key: 'c', label: 'Clear list' },
+          ...this.router.globalActionChoices()
+        ])
       ],
       color,
       render

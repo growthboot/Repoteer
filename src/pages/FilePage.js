@@ -1,5 +1,5 @@
 import path from 'path';
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns, formatColumnPairs } from '../utils/menu.js';
 import { formatDiffForDisplay } from '../utils/diff.js';
 
@@ -65,11 +65,11 @@ export class FilePage {
     render(null);
 
     const answer = await promptAction('Action: ', {
-      choices: [
+      choices: gridChoices([
         { key: 'c', label: 'Copy file diff' },
         { key: 'd', label: 'Discard file changes' },
         ...this.router.globalActionChoices()
-      ],
+      ]),
       color,
       render
     });

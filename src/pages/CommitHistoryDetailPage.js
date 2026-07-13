@@ -1,5 +1,5 @@
 import path from 'path';
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatTable } from '../utils/table.js';
 import { formatActionColumns } from '../utils/menu.js';
 
@@ -54,7 +54,7 @@ export class CommitHistoryDetailPage {
     render(null);
 
     const answer = await promptAction('Action: ', {
-      choices: this.router.globalActionChoices(),
+      choices: gridChoices(this.router.globalActionChoices()),
       color,
       render
     });

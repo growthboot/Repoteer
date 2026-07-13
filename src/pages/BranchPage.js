@@ -1,5 +1,5 @@
 import path from 'path';
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatTable } from '../utils/table.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { formatBranchName, formatBranchValue } from '../utils/format.js';
@@ -61,7 +61,7 @@ export class BranchPage {
         ...(branches.ok ? branches.branches.map((branch, index) => {
           return { key: String(index + 1), label: 'Branch: ' + branch };
         }) : []),
-        ...this.router.globalActionChoices()
+        ...gridChoices(this.router.globalActionChoices())
       ],
       color,
       render
