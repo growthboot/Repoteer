@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatDiffForDisplay } from '../utils/diff.js';
 import { formatActionColumns } from '../utils/menu.js';
 
@@ -48,12 +48,12 @@ export class DiffPage {
     render(null);
 
     const answer = await promptAction('Action: ', {
-      choices: [
+      choices: gridChoices([
         { key: 'c', label: 'Copy full diff' },
         { key: 'g', label: 'Generate summary' },
         { key: 'e', label: 'Security review' },
         ...this.router.globalActionChoices()
-      ],
+      ]),
       color,
       render
     });

@@ -1,6 +1,6 @@
 import { spawnSync } from 'child_process';
 import path from 'path';
-import { closeInput, promptAction, promptLine } from '../utils/input.js';
+import { closeInput, gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { formatTable } from '../utils/table.js';
 
@@ -28,26 +28,27 @@ export class ProjectItemsPanel {
     const rowCount = Math.max(bookmarks.length + 1, commands.length + 1, clipboardItems.length + 1);
 
     for (let index = 0; index < rowCount; index += 1) {
+      const navigationRow = {};
       const bookmark = bookmarks[index] ?? null;
       const command = commands[index] ?? null;
       const clipboardItem = clipboardItems[index] ?? null;
 
       if (bookmark) {
-        choices.push({ key: 'm' + String(index + 1), label: 'Bookmark: ' + bookmark.title });
+        choices.push({ key: 'm' + String(index + 1), label: 'Bookmark: ' + bookmark.title, navigationRow, navigationColumn: 0 });
       } else if (index === bookmarks.length) {
-        choices.push({ key: 'am', label: 'Add bookmark' });
+        choices.push({ key: 'am', label: 'Add bookmark', navigationRow, navigationColumn: 0 });
       }
 
       if (command) {
-        choices.push({ key: 'c' + String(index + 1), label: 'Command: ' + command.title });
+        choices.push({ key: 'c' + String(index + 1), label: 'Command: ' + command.title, navigationRow, navigationColumn: 1 });
       } else if (index === commands.length) {
-        choices.push({ key: 'ac', label: 'Add command' });
+        choices.push({ key: 'ac', label: 'Add command', navigationRow, navigationColumn: 1 });
       }
 
       if (clipboardItem) {
-        choices.push({ key: 'p' + String(index + 1), label: 'Copy clipboard: ' + clipboardItem.title });
+        choices.push({ key: 'p' + String(index + 1), label: 'Copy clipboard: ' + clipboardItem.title, navigationRow, navigationColumn: 2 });
       } else if (index === clipboardItems.length) {
-        choices.push({ key: 'ap', label: 'Add clipboard' });
+        choices.push({ key: 'ap', label: 'Add clipboard', navigationRow, navigationColumn: 2 });
       }
     }
 
@@ -349,13 +350,13 @@ export class ProjectItemsPanel {
     render(null);
 
     const answer = await promptAction('Action: ', {
-      choices: [
+      choices: gridChoices([
         { key: 'o', label: 'Open' },
         { key: 'c', label: 'Copy' },
         { key: 'e', label: 'Edit' },
         { key: 'd', label: 'Delete' },
         ...this.globalActionChoices()
-      ],
+      ]),
       color: this.color,
       render
     });
@@ -439,14 +440,14 @@ export class ProjectItemsPanel {
     render(null);
 
     const answer = await promptAction('Action: ', {
-      choices: [
+      choices: gridChoices([
         { key: 'x', label: 'Run' },
         { key: 't', label: 'Open in terminal' },
         { key: 'c', label: 'Copy' },
         { key: 'e', label: 'Edit' },
         { key: 'd', label: 'Delete' },
         ...this.globalActionChoices()
-      ],
+      ]),
       color: this.color,
       render
     });
@@ -581,12 +582,12 @@ export class ProjectItemsPanel {
     render(null);
 
     const answer = await promptAction('Action: ', {
-      choices: [
+      choices: gridChoices([
         { key: 'c', label: 'Copy' },
         { key: 'e', label: 'Edit' },
         { key: 'd', label: 'Delete' },
         ...this.globalActionChoices()
-      ],
+      ]),
       color: this.color,
       render
     });

@@ -1,4 +1,4 @@
-import { promptAction } from '../utils/input.js';
+import { gridChoices, promptAction } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 import { stripAnsi } from '../utils/color.js';
 
@@ -59,9 +59,11 @@ export class ProjectsHistoryPage {
         ...history.commits.map((commit, index) => {
           return { key: String(index + 1), label: 'Commit: ' + (commit.title || commit.shortHash) };
         }),
-        ...(history.hasNextPage ? [{ key: 'n', label: 'Next page' }] : []),
-        ...(page > 0 ? [{ key: 'p', label: 'Previous page' }] : []),
-        ...this.router.globalActionChoices()
+        ...gridChoices([
+          ...(history.hasNextPage ? [{ key: 'n', label: 'Next page' }] : []),
+          ...(page > 0 ? [{ key: 'p', label: 'Previous page' }] : []),
+          ...this.router.globalActionChoices()
+        ])
       ],
       color,
       render

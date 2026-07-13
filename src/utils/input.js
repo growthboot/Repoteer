@@ -51,6 +51,25 @@ export async function promptAction(label, options = {}) {
   return await readKeyAction(label, choices, options);
 }
 
+export function gridChoices(choices, columnCount = 2) {
+  const values = Array.isArray(choices) ? choices : [];
+  const columns = Math.max(1, Math.floor(Number(columnCount) || 1));
+  const rowTokens = [];
+
+  return values.map((choice, index) => {
+    const rowIndex = Math.floor(index / columns);
+    const value = typeof choice === 'string' ? { key: choice, label: choice } : choice;
+
+    rowTokens[rowIndex] ??= {};
+
+    return {
+      ...value,
+      navigationRow: rowTokens[rowIndex],
+      navigationColumn: index % columns
+    };
+  });
+}
+
 export function closeInput() {
   if (rl) {
     rl.close();
@@ -81,7 +100,11 @@ function normalizeChoices(choices) {
         key: String(choice.key ?? ''),
         renderKey: String(choice.renderKey ?? choice.key ?? ''),
         numberedSuffix: choice.numberedSuffix ? String(choice.numberedSuffix) : '',
-        label: String(choice.label ?? choice.key ?? '')
+        label: String(choice.label ?? choice.key ?? ''),
+        navigationRow: choice.navigationRow ?? null,
+        navigationColumn: Number.isFinite(Number(choice.navigationColumn))
+          ? Number(choice.navigationColumn)
+          : null
       };
     })
     .filter((choice) => choice && choice.key);
@@ -94,6 +117,7 @@ async function readKeyAction(label, choices, options) {
     const renderScreen = typeof options.render === 'function' ? options.render : null;
     const frameCache = renderScreen ? createFrameCache(renderScreen, choices) : null;
     let selectedIndex = 0;
+    let preferredColumn = 0;
     let numberedContext = getInitialNumberedContext(choices);
     let buffer = '';
     let rendered = false;
@@ -118,7 +142,10 @@ async function readKeyAction(label, choices, options) {
     };
 
     const moveSelection = (direction) => {
-      selectedIndex = (selectedIndex + direction + choices.length) % choices.length;
+      const movement = moveSpreadsheetSelection(choices, selectedIndex, direction, preferredColumn);
+
+      selectedIndex = movement.index;
+      preferredColumn = movement.preferredColumn;
       render();
     };
 
@@ -141,14 +168,26 @@ async function readKeyAction(label, choices, options) {
         if (character === '\u001b') {
           const sequence = value.slice(index, index + 3);
 
-          if (sequence === '\u001b[A' || sequence === '\u001b[D') {
-            moveSelection(-1);
+          if (sequence === '\u001b[A') {
+            moveSelection('up');
             index += 2;
             continue;
           }
 
-          if (sequence === '\u001b[B' || sequence === '\u001b[C') {
-            moveSelection(1);
+          if (sequence === '\u001b[B') {
+            moveSelection('down');
+            index += 2;
+            continue;
+          }
+
+          if (sequence === '\u001b[D') {
+            moveSelection('left');
+            index += 2;
+            continue;
+          }
+
+          if (sequence === '\u001b[C') {
+            moveSelection('right');
             index += 2;
             continue;
           }
@@ -227,6 +266,75 @@ async function readKeyAction(label, choices, options) {
     render();
     frameCache?.warm();
   });
+}
+
+export function moveSpreadsheetSelection(choices, selectedIndex, direction, preferredColumn = 0) {
+  const rows = createNavigationRows(choices);
+  const currentRowIndex = rows.findIndex((row) => row.some((entry) => entry.index === selectedIndex));
+
+  if (currentRowIndex < 0) {
+    return { index: selectedIndex, preferredColumn };
+  }
+
+  const currentRow = rows[currentRowIndex];
+  const currentEntryIndex = currentRow.findIndex((entry) => entry.index === selectedIndex);
+  const currentEntry = currentRow[currentEntryIndex];
+
+  if (direction === 'left' || direction === 'right') {
+    const offset = direction === 'left' ? -1 : 1;
+    const targetEntryIndex = (currentEntryIndex + offset + currentRow.length) % currentRow.length;
+    const targetEntry = currentRow[targetEntryIndex];
+
+    return {
+      index: targetEntry.index,
+      preferredColumn: targetEntry.column
+    };
+  }
+
+  const rowOffset = direction === 'up' ? -1 : direction === 'down' ? 1 : 0;
+  const targetRow = rows[currentRowIndex + rowOffset];
+
+  if (!targetRow || rowOffset === 0) {
+    return {
+      index: selectedIndex,
+      preferredColumn
+    };
+  }
+
+  const targetEntry = targetRow.reduce((closest, entry) => {
+    const closestDistance = Math.abs(closest.column - preferredColumn);
+    const entryDistance = Math.abs(entry.column - preferredColumn);
+
+    return entryDistance < closestDistance ? entry : closest;
+  });
+
+  return {
+    index: targetEntry.index,
+    preferredColumn
+  };
+}
+
+function createNavigationRows(choices) {
+  const rows = [];
+  const rowIndexes = new Map();
+
+  choices.forEach((choice, index) => {
+    const rowToken = choice.navigationRow ?? choice;
+
+    if (!rowIndexes.has(rowToken)) {
+      rowIndexes.set(rowToken, rows.length);
+      rows.push([]);
+    }
+
+    const row = rows[rowIndexes.get(rowToken)];
+    const requestedColumn = Number(choice.navigationColumn);
+    const column = Number.isFinite(requestedColumn) ? requestedColumn : row.length;
+
+    row.push({ index, column });
+  });
+
+  rows.forEach((row) => row.sort((a, b) => a.column - b.column));
+  return rows;
 }
 
 function createFrameCache(renderScreen, choices) {

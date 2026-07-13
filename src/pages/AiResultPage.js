@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 
 export class AiResultPage {
@@ -32,11 +32,11 @@ export class AiResultPage {
     render(null);
 
     const answer = await promptAction('Action: ', {
-      choices: [
+      choices: gridChoices([
         { key: 'c', label: 'Copy result' },
         { key: 'a', label: 'Run again' },
         ...this.router.globalActionChoices()
-      ],
+      ]),
       color,
       render
     });

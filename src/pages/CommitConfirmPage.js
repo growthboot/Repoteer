@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatActionColumns } from '../utils/menu.js';
 
 export class CommitConfirmPage {
@@ -45,12 +45,12 @@ export class CommitConfirmPage {
     render(null);
 
     const answer = await promptAction('Action: ', {
-      choices: [
+      choices: gridChoices([
         { key: 'c', label: 'Confirm' },
         { key: 't', label: 'Edit title' },
         { key: 'e', label: 'Edit body' },
         ...this.router.globalActionChoices()
-      ],
+      ]),
       color,
       render
     });

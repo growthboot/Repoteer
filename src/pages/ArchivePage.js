@@ -1,4 +1,4 @@
-import { promptAction, promptLine } from '../utils/input.js';
+import { gridChoices, promptAction, promptLine } from '../utils/input.js';
 import { formatTable } from '../utils/table.js';
 import { formatActionColumns } from '../utils/menu.js';
 
@@ -12,6 +12,15 @@ export class ArchivePage {
     const color = this.runtime.color;
     const projects = this.runtime.projectManager.listArchivedProjects()
       .sort((a, b) => a.name.localeCompare(b.name));
+    const projectChoices = projects.flatMap((project, index) => {
+      const key = String(index + 1);
+      const navigationRow = {};
+
+      return [
+        { key: key + 'u', label: 'Unarchive: ' + project.name, navigationRow, navigationColumn: 0 },
+        { key: key + 'd', label: 'Delete: ' + project.name, navigationRow, navigationColumn: 1 }
+      ];
+    });
 
     const render = (selectedKey = null) => {
       console.clear();
@@ -37,13 +46,8 @@ export class ArchivePage {
 
     const answer = await promptAction('Action: ', {
       choices: [
-        ...projects.map((project, index) => {
-          return { key: String(index + 1) + 'u', label: 'Unarchive: ' + project.name };
-        }),
-        ...projects.map((project, index) => {
-          return { key: String(index + 1) + 'd', label: 'Delete: ' + project.name };
-        }),
-        ...this.router.globalActionChoices()
+        ...projectChoices,
+        ...gridChoices(this.router.globalActionChoices())
       ],
       color,
       render
