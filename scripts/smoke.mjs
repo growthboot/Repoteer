@@ -2284,6 +2284,89 @@ function smokeCommitConfirmAutoPushPath() {
   assert(!result.stdout.includes('Push now?'), 'commit confirmation should not ask for a second push confirmation');
   assert(result.stdout.includes('Push complete.'), 'commit confirmation should report successful push');
 }
+function smokeCommitConfirmPushRetryPath() {
+  const code = `
+    import { Router } from './src/router/Router.js';
+    import { CommitConfirmPage } from './src/pages/CommitConfirmPage.js';
+
+    const repo = {
+      path: '/tmp/push-retry-repo',
+      modifiedFiles: 1
+    };
+    const color = {
+      bold: (value) => value,
+      dim: (value) => value,
+      green: (value) => value,
+      yellow: (value) => value,
+      red: (value) => value,
+      darkYellow: (value) => value
+    };
+    let pushCalls = 0;
+    const runtime = {
+      color,
+      commitManager: {
+        commit(repoPath, title, body) {
+          console.log('COMMIT_CALLED ' + repoPath + ' ' + title + ' ' + body);
+          return { ok: true, warning: null };
+        }
+      },
+      git: {
+        push(repoPath) {
+          pushCalls += 1;
+          console.log('PUSH_CALLED ' + String(pushCalls) + ' ' + repoPath);
+
+          if (pushCalls === 1) {
+            return { ok: false, warning: 'Temporary push transport failure.' };
+          }
+
+          return { ok: true, warning: null };
+        }
+      },
+      refreshSnapshot() {
+        return {
+          projects: [
+            {
+              name: 'Push Retry Project',
+              repos: [repo]
+            }
+          ]
+        };
+      }
+    };
+    class ProjectPage {
+      async show() {
+        console.log('Project Page Returned');
+      }
+    }
+    const router = new Router(runtime, {
+      project: ProjectPage,
+      commitConfirm: CommitConfirmPage
+    });
+
+    await router.open('project');
+    await router.open('commitConfirm', {
+      projectName: 'Push Retry Project',
+      repoPath: repo.path,
+      title: 'retry push',
+      body: 'Retry only the failed push.',
+      pushAfterCommit: true,
+      returnPage: 'project'
+    });
+  `;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+    cwd: root,
+    input: ['c', 'r', ''].join('\n') + '\n',
+    encoding: 'utf8'
+  });
+
+  assert(result.status === 0, result.stderr || 'commit confirmation push retry path failed');
+  assert(countOccurrences(result.stdout, 'COMMIT_CALLED ') === 1, 'push retry must not recreate the commit');
+  assert(countOccurrences(result.stdout, 'PUSH_CALLED ') === 2, 'push retry should retry git push exactly once');
+  assert(result.stdout.includes('Temporary push transport failure.'), 'push retry should show the original failure');
+  assert(result.stdout.includes('Retry push'), 'push retry should offer a retry action');
+  assert(result.stdout.includes('Push complete.'), 'push retry should report the successful retry');
+}
+
 
 function smokeRepoPageOpenAndDiffPath() {
   if (!gitAvailable()) {
@@ -3054,6 +3137,7 @@ smokeBranchFormatting();
 await smokeRouterTerminalModePath();
 smokeCommitConfirmReturnPagePath();
 smokeCommitConfirmAutoPushPath();
+smokeCommitConfirmPushRetryPath();
 smokeRepoPageOpenAndDiffPath();
 smokeRepoPageOpenFolderActionsPath();
 smokeRepoPageUnpushedPushPath();

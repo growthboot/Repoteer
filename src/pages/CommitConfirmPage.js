@@ -113,11 +113,34 @@ export class CommitConfirmPage {
     this.runtime.refreshSnapshot();
 
     if (this.params.pushAfterCommit === true) {
-      const pushed = this.runtime.git.push(repo.path);
+      let pushed = this.runtime.git.push(repo.path);
 
-      if (!pushed.ok) {
+      while (!pushed.ok) {
         console.log(color.yellow(pushed.warning));
-      } else {
+        console.log('');
+        formatActionColumns([
+          color.bold('R.') + ' Retry push',
+          color.bold('C.') + ' Continue'
+        ], { color }).forEach((row) => console.log(row));
+        console.log('');
+
+        const answer = await promptAction('Action: ', {
+          choices: gridChoices([
+            { key: 'r', label: 'Retry push' },
+            { key: 'c', label: 'Continue' }
+          ]),
+          color
+        });
+
+        if (answer.trim().toLowerCase() !== 'r') {
+          break;
+        }
+
+        console.log('');
+        pushed = this.runtime.git.push(repo.path);
+      }
+
+      if (pushed.ok) {
         console.log(color.green('Push complete.'));
 
         if (pushed.warning) {
