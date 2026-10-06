@@ -168,7 +168,7 @@ export class AiProviderSelectPage {
     result.warnings.forEach((warning) => console.log(color.yellow(warning)));
 
     if (this.isCommitMessageTool(params.toolId)) {
-      await this.promptForGeneratedCommitMessage(params);
+      await this.promptForGeneratedCommitMessage({ ...params, providerId: provider.id });
       return;
     }
 
@@ -347,7 +347,7 @@ export class AiProviderSelectPage {
       projectName: params.projectName,
       repoPath: params.repoPath,
       title: parsed.title,
-      body: parsed.body,
+      body: this.normalizeGeneratedCommitBody(parsed.body, params.providerId),
       pushAfterCommit: true,
       returnPage: 'project',
       returnParams: {
@@ -356,6 +356,16 @@ export class AiProviderSelectPage {
     });
 
     return true;
+  }
+
+  normalizeGeneratedCommitBody(body, providerId) {
+    const normalizedBody = String(body ?? '');
+
+    if (providerId !== 'chatgpt-temp') {
+      return normalizedBody;
+    }
+
+    return normalizedBody.replace(/(?:^|\s+)Pasted text\s*$/, '').trimEnd();
   }
 
   isCommitMessageTool(toolId) {
